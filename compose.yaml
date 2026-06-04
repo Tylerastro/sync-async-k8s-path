@@ -1,0 +1,23 @@
+# 壓測靶機的 PostgreSQL。
+# 刻意不掛 named volume —— `docker compose down` 即重置資料，
+# 每輪實驗都從同一份 seed 開始，數據才有可比性。
+services:
+  db:
+    image: postgres:17-alpine
+    # PG 預設 max_connections=100。靶機開了 sync + async 兩組 pool，
+    # 做「pool 20 → 100」實驗時兩組合計會超過 100 直接撞死 —— 先調高。
+    # （production 不會這樣做，connection 是昂貴資源，這也是個考點）
+    command: ["postgres", "-c", "max_connections=500"]
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: social
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d social"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

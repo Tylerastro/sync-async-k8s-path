@@ -1,0 +1,85 @@
+ Image loadtest-app:stage2 Pulling 
+ Image loadtest-app:stage2 pull access denied for loadtest-app, repository does not exist or may require 'docker login': denied: requested access to the resource is denied 
+ Image loadtest-app:stage2 Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 524B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.26kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+#3 DONE 0.3s
+
+#4 [internal] load metadata for docker.io/library/python:3.13-slim-bookworm
+#4 DONE 0.4s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 171B done
+#5 DONE 0.0s
+
+#6 [builder 1/3] FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca
+#6 DONE 0.0s
+
+#7 [stage-1 1/4] FROM docker.io/library/python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 1.23kB done
+#8 DONE 0.0s
+
+#9 [builder 2/3] WORKDIR /app
+#9 CACHED
+
+#10 [builder 3/3] RUN --mount=type=cache,target=/root/.cache/uv     --mount=type=bind,source=uv.lock,target=uv.lock     --mount=type=bind,source=pyproject.toml,target=pyproject.toml     uv sync --locked --no-dev --no-install-project
+#10 CACHED
+
+#11 [stage-1 3/4] COPY --from=builder /app/.venv /app/.venv
+#11 CACHED
+
+#12 [stage-1 2/4] WORKDIR /app
+#12 CACHED
+
+#13 [stage-1 4/4] COPY app/ app/
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 writing image sha256:56fc6e6dd2ad0361e23de29248b946c06a11d358af387057b811c0d4308fdcdb done
+#14 naming to docker.io/library/loadtest-app:stage2 done
+#14 DONE 0.0s
+
+#15 resolving provenance for metadata file
+#15 DONE 0.0s
+ Image loadtest-app:stage2 Built 
+ Container k8s-db-1 Running 
+ Container k8s-app-1 Recreate 
+ Container k8s-app-1 Recreated 
+ Container k8s-db-1 Waiting 
+ Container k8s-db-1 Healthy 
+ Container k8s-app-1 Starting 
+ Container k8s-app-1 Started 
+ Container k8s-app-1 Waiting 
+ Container k8s-app-1 Healthy 
+ Container k8s-locust-run-192b4e9b899b Creating 
+ Container k8s-locust-run-192b4e9b899b Created 
+[2026-06-05 02:39:10,257] 338e6a64b3b9/INFO/locust.main: Starting Locust 2.44.1
+[2026-06-05 02:39:10,258] 338e6a64b3b9/INFO/locust.main: Run time limit set to 60 seconds
+[2026-06-05 02:39:10,258] 338e6a64b3b9/INFO/locust.runners: Ramping to 200 users at a rate of 100.00 per second
+[2026-06-05 02:39:11,260] 338e6a64b3b9/INFO/locust.runners: All users spawned: {"PoolProbeUser": 200} (200 total users)
+[2026-06-05 02:40:10,174] 338e6a64b3b9/INFO/locust.main: --run-time limit reached, shutting down
+[2026-06-05 02:40:10,198] 338e6a64b3b9/INFO/locust.main: Shutting down (exit code 0)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /async/posts                                                                   10020     0(0.00%) |   1174      52    2586   1200 |  167.19        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                     10020     0(0.00%) |   1174      52    2586   1200 |  167.19        0.00
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /async/posts                                                                         1200   1200   1200   1300   1300   1400   1400   1500   2300   2400   2600  10020
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                           1200   1200   1200   1300   1300   1400   1400   1500   2300   2400   2600  10020
+

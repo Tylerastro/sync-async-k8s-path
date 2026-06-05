@@ -1,0 +1,4 @@
+k8s-locust-run-138ffb3e14b1  cpu=4.69%  mem=78.83MiB / 2GiB
+k8s-app-1  cpu=86.35%  mem=109.4MiB / 256MiB
+k8s-db-1  cpu=9.42%  mem=165.1MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=145.9MiB / 11.72GiB

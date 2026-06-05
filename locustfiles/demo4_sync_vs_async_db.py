@@ -10,14 +10,21 @@
     （已用 curl 在 100 併發初驗過：async p95=119ms vs sync p95=342ms）
 
 跑法（容器模式）
-    # 靶機要開大 pool（讓 threadpool 成為 sync 的瓶頸，而不是 pool）
-    DB_POOL_SIZE=100 docker compose up -d --build --wait
+    # 靶機要開大 pool（讓 threadpool 成為 sync 的瓶頸，而不是 pool）。
+    # 注意要用 export：後面每一個 compose 指令（含 compose run）都會重新解析設定，
+    # 只在 up 前綴變數的話，下一個 compose run 會以預設 pool=5 把 app「修」回去 ——
+    # 我們真的踩過：四輪數據一模一樣，inspect 才發現 app 被默默重建。
+    export DB_POOL_SIZE=100
+    docker compose up -d --build --wait
 
     # 兩輪同參數，只換 class
     docker compose run --rm locust -f /mnt/locust/demo4_sync_vs_async_db.py AsyncPostsUser \
         --host http://app:8000 --headless -u 100 -r 50 -t 60s
     docker compose run --rm locust -f /mnt/locust/demo4_sync_vs_async_db.py SyncPostsUser \
         --host http://app:8000 --headless -u 100 -r 50 -t 60s
+
+    # 跑完驗證旋鈕真的生效（養成習慣）：
+    docker inspect k8s-app-1 --format '{{.Config.Env}}' | tr ' ' '\\n' | grep DB_POOL
 
 跑法（本機模式）
     DB_POOL_SIZE=100 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
@@ -29,6 +36,9 @@
     | -------------- | ------------------------ | ---------- |
     | AsyncPostsUser | 100 conn / 0.1s = 1000   | ~120ms     |
     | SyncPostsUser  | 40 threads / 0.1s = 400  | ~300ms+    |
+
+    實測會高於預期（async 實測 512 RPS / p50 200ms）——
+    ORM 序列化的 CPU 成本沒算進理論值，見 README Lesson 3。
 
     接著把 -u 拉到 200、400，觀察 sync 的 p95 線性惡化、async 撐到 pool 滿才惡化。
 

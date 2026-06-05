@@ -6,13 +6,18 @@
     這個 demo 回答「為何 connection pool 重要」與「為何 DB 才是真 bottleneck」。
 
 跑法（容器模式；攻擊參數固定，每輪重置 + 換 pool 大小）
-    # 每輪：重置 DB（鐵則 3）→ 換 pool 重啟 → 同一個攻擊 → 記錄
+    # 每輪：重置 DB（鐵則 3）→ 換 pool 重啟 → 同一個攻擊 → 驗證 → 記錄。
+    # DB_POOL_SIZE 必須 export：後面的 compose run 也會重新解析設定，
+    # 沒 export 的話它會以預設 pool=5 把 app 重建回去（真實踩過的坑 ——
+    # 症狀是「pool 怎麼掃數據都一樣」）。
     docker compose down
-    DB_POOL_SIZE=10 docker compose up -d --build --wait
+    export DB_POOL_SIZE=10
+    docker compose up -d --build --wait
     docker compose run --rm locust -f /mnt/locust/demo5_pool_starvation.py \
         --host http://app:8000 --headless -u 200 -r 100 -t 60s
+    docker inspect k8s-app-1 --format '{{.Config.Env}}' | tr ' ' '\\n' | grep DB_POOL  # 驗證旋鈕
 
-    # 下一輪換 DB_POOL_SIZE=20 / 50 / 100，攻擊參數不動
+    # 下一輪換 export DB_POOL_SIZE=20 / 50 / 100，攻擊參數不動
 
 跑法（本機模式）
     DB_POOL_SIZE=10  uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
@@ -26,6 +31,10 @@
     | 20           | 400      | ~500ms                    |
     | 50           | 1000     | ~200ms                    |
     | 100          | 2000     | ~100ms（幾乎不排隊）      |
+
+    注意：這是押注值，實測會系統性更高（pool=100 實測 p95=420ms）——
+    connection 實佔 ~60ms 而非 50ms（fetch + ORM 序列化），且 pool≥50 後
+    瓶頸轉移到 event loop CPU。對答案與完整數據見 README「已驗證數據」。
 
     把四輪的 p95 畫成曲線 —— 這張圖就是教材。
 

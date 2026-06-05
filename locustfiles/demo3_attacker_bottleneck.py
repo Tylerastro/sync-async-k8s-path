@@ -13,22 +13,22 @@
 
     # 第一輪：舊武器
     docker compose run --rm locust -f /mnt/locust/demo3_attacker_bottleneck.py SlowAttacker \
-        --host http://app:8000 --headless -u 500 -r 100 -t 30s
+        --host http://app:8000 --headless -u 300 -r 100 -t 30s
 
     # 第二輪：新武器（同參數）
     docker compose run --rm locust -f /mnt/locust/demo3_attacker_bottleneck.py FastAttacker \
-        --host http://app:8000 --headless -u 500 -r 100 -t 30s
+        --host http://app:8000 --headless -u 300 -r 100 -t 30s
 
     # 第三輪：真正的解法 —— 多 process（前菜：階段三的分散式 Locust）
     # locust 容器拿到 4 顆核心（cpuset 4-7），--processes 4 剛好吃滿
     docker compose run --rm locust -f /mnt/locust/demo3_attacker_bottleneck.py FastAttacker \
-        --host http://app:8000 --processes 4 --headless -u 500 -r 100 -t 30s
+        --host http://app:8000 --processes 4 --headless -u 300 -r 100 -t 30s
 
 跑法（本機模式）
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
-    uv run locust -f locustfiles/demo3_attacker_bottleneck.py SlowAttacker --headless -u 500 -r 100 -t 30s
-    uv run locust -f locustfiles/demo3_attacker_bottleneck.py FastAttacker --headless -u 500 -r 100 -t 30s
-    uv run locust -f locustfiles/demo3_attacker_bottleneck.py FastAttacker --processes 4 --headless -u 500 -r 100 -t 30s
+    uv run locust -f locustfiles/demo3_attacker_bottleneck.py SlowAttacker --headless -u 300 -r 100 -t 30s
+    uv run locust -f locustfiles/demo3_attacker_bottleneck.py FastAttacker --headless -u 300 -r 100 -t 30s
+    uv run locust -f locustfiles/demo3_attacker_bottleneck.py FastAttacker --processes 4 --headless -u 300 -r 100 -t 30s
 
 觀察（重點：同時監控攻擊方！）
     容器模式另開 terminal 跑 `docker stats`，盯 locust 容器的 CPU%
@@ -36,7 +36,7 @@
         top -stats pid,command,cpu -pid $(pgrep -f 'locust' | head -1)
     - SlowAttacker：locust process CPU 鎖死 100%（單核），RPS 上不去
       → 此時靶機 uvicorn 可能還很閒 —— 數據是假的，瓶頸在攻擊機
-    - FastAttacker：同樣 500 users，RPS 明顯翻倍以上
+    - FastAttacker：同樣 300 users，RPS 明顯翻倍以上
     - --processes 4：再翻 —— 但接著瓶頸換人（靶機？網路？）
 
 要能回答

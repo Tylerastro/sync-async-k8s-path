@@ -1,0 +1,27 @@
+ Container k8s-db-1 Running 
+ Container k8s-app-1 Running 
+ Container k8s-db-1 Waiting 
+ Container k8s-db-1 Healthy 
+ Container k8s-app-1 Waiting 
+ Container k8s-app-1 Healthy 
+ Container k8s-locust-run-673ba1766270 Creating 
+ Container k8s-locust-run-673ba1766270 Created 
+[2026-06-05 02:42:41,957] c5e93ca42fa3/INFO/locust.main: Starting Locust 2.44.1
+[2026-06-05 02:42:41,958] c5e93ca42fa3/INFO/locust.main: Run time limit set to 60 seconds
+[2026-06-05 02:42:41,959] c5e93ca42fa3/INFO/locust.runners: Ramping to 200 users at a rate of 100.00 per second
+[2026-06-05 02:42:42,960] c5e93ca42fa3/INFO/locust.runners: All users spawned: {"PoolProbeUser": 200} (200 total users)
+[2026-06-05 02:43:41,867] c5e93ca42fa3/INFO/locust.main: --run-time limit reached, shutting down
+[2026-06-05 02:43:41,888] c5e93ca42fa3/INFO/locust.main: Shutting down (exit code 0)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /async/posts                                                                   38481     0(0.00%) |    307      59     546    320 |  642.47        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                     38481     0(0.00%) |    307      59     546    320 |  642.47        0.00
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /async/posts                                                                          320    330    340    350    390    420    460    480    530    550    550  38481
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                            320    330    340    350    390    420    460    480    530    550    550  38481
+

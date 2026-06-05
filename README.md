@@ -132,6 +132,11 @@ compose 已調到 200 —— pool=100 實驗時 sync + async 兩組剛好用滿
 index.html               # 互動式介紹頁（open index.html）：repo 意義、demo 課表、runbook、event loop 模擬器
 compose.yaml             # db + 靶機 + Locust 三容器，cpuset 鎖核心 + 記憶體上限
 Dockerfile               # 靶機 multi-stage build（uv 裝依賴 → python slim 跑）
+k8s/                     # 階段二（下）：OrbStack 本地 K8s 部署（教學級註解 + runbook）
+├── namespace.yaml       # loadtest namespace
+├── db.yaml              # PG：ConfigMap(init.sql) + Secret + Deployment + ClusterIP Service
+├── app.yaml             # 靶機：ConfigMap(pool 旋鈕) + Deployment(Recreate) + LoadBalancer Service
+└── README.md            # 部署 runbook、實驗旋鈕、K8s vs compose baseline 對比
 db/init.sql              # schema + seed（50 users / 200 posts）
 app/
 ├── main.py              # FastAPI app、lifespan（預熱 pool + dispose）、healthz/readyz
@@ -158,10 +163,25 @@ demo4（100 users, delay_ms=100, pool=100, SQLAlchemy ORM）:
 demo3（300 users 打 /healthz）:
   HttpUser      5,921 RPS    ← 攻擊機自己是瓶頸
   FastHttpUser 24,762 RPS    ← 同參數，4.2 倍
+
+demo5（200 users, delay_ms=50, 容器模式，只動 DB_POOL_SIZE）:
+  pool=5    72 RPS  p95=2900ms  ← 意外對照組（旋鈕沒接上的那輪，見 locustfiles/README 坑點）
+  pool=10  167 RPS  p95=1400ms
+  pool=20  302 RPS  p95= 740ms  ← pool 翻倍、p95 砍半：pool starvation dominates latency
+  pool=50  620 RPS  p95= 390ms  ← 靶機 CPU 86%，瓶頸開始轉移
+  pool=100 642 RPS  p95= 420ms  ← CPU 102%：pool 再翻倍只 +3.6%，瓶頸已是 event loop
+  驗證了 Little's Law：p50 ≈ 200 users ÷ RPS，每條 connection 實佔 ~60ms（50ms pg_sleep + ORM）
+
+demo6（階梯 10→100→1000→5000，pool=100，--processes 4）:
+  1000 users：CPU 56-69%、無 error —— 撐住
+  5000 users：CPU 100%、MEM 貼死 256MiB limit、HTTP 500 ×2,802（3.23%）
+              p95=30s = SQLAlchemy pool timeout（QueuePool limit reached, timeout 30.00）
+  單 Pod baseline：~1000 users 撐住、5000 必崩 —— 階段三 HPA 的對照基準
 ```
 
 ## 下一步（對齊 Roadmap）
 
-- [ ] 跑完 demo1~6 並用 Problem-Driven 格式記錄（demo5 的 p95 曲線、demo6 的崩潰點）
+- [x] 跑完 demo1~6 並用 Problem-Driven 格式記錄（demo5 的 p95 曲線、demo6 的崩潰點）
 - [x] 階段二（上）：Dockerfile（multi-stage）+ compose 三容器化，cpuset 攻防隔離
-- [ ] 階段二（下）：本地 K8s 部署
+- [x] 階段二（下）：本地 K8s 部署（OrbStack，單 Pod baseline：RPS 440 vs compose 512）
+- [ ] 階段三：分散式 Locust（Master-Worker）+ HPA —— 驗證「3 Pods 撐不撐得到 3000 users」

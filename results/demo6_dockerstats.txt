@@ -1,0 +1,156 @@
+== t≈20s  10:46:09
+k8s-app-1  cpu=0.09%  mem=78.89MiB / 256MiB
+k8s-db-1  cpu=0.83%  mem=322.4MiB / 1GiB
+docx-render-convergence-app-1  cpu=54.94%  mem=198.3MiB / 11.72GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=148.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=10.63%  mem=79.08MiB / 2GiB
+== t≈40s  10:46:29
+k8s-locust-run-bfc0628ca260  cpu=1.47%  mem=80.14MiB / 2GiB
+k8s-app-1  cpu=4.42%  mem=81.74MiB / 256MiB
+k8s-db-1  cpu=1.12%  mem=342.6MiB / 1GiB
+docx-render-convergence-app-1  cpu=48.39%  mem=198.3MiB / 11.72GiB
+wenzo_copilot_postgres  cpu=0.01%  mem=148.9MiB / 11.72GiB
+== t≈60s  10:46:48
+k8s-locust-run-bfc0628ca260  cpu=0.78%  mem=88.91MiB / 2GiB
+k8s-app-1  cpu=1.70%  mem=78.45MiB / 256MiB
+k8s-db-1  cpu=2.39%  mem=318.8MiB / 1GiB
+docx-render-convergence-app-1  cpu=58.24%  mem=201MiB / 11.72GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.2MiB / 11.72GiB
+== t≈80s  10:47:07
+k8s-locust-run-bfc0628ca260  cpu=0.59%  mem=89.15MiB / 2GiB
+k8s-app-1  cpu=2.70%  mem=78.42MiB / 256MiB
+k8s-db-1  cpu=0.52%  mem=325.3MiB / 1GiB
+docx-render-convergence-app-1  cpu=54.92%  mem=201MiB / 11.72GiB
+wenzo_copilot_postgres  cpu=0.02%  mem=159.1MiB / 11.72GiB
+== t≈100s  10:47:26
+k8s-locust-run-bfc0628ca260  cpu=0.75%  mem=82MiB / 2GiB
+k8s-app-1  cpu=6.53%  mem=72.77MiB / 256MiB
+k8s-db-1  cpu=1.14%  mem=325.2MiB / 1GiB
+docx-render-convergence-app-1  cpu=57.37%  mem=198.7MiB / 11.72GiB
+wenzo_copilot_postgres  cpu=0.01%  mem=149.5MiB / 11.72GiB
+== t≈120s  10:47:45
+docx-render-convergence-app-1  cpu=74.64%  mem=204.8MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=0.52%  mem=81.71MiB / 2GiB
+k8s-app-1  cpu=3.94%  mem=73.93MiB / 256MiB
+k8s-db-1  cpu=2.53%  mem=327.3MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.50%  mem=147.2MiB / 11.72GiB
+== t≈140s  10:48:05
+docx-render-convergence-app-1  cpu=57.56%  mem=204.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=0.78%  mem=81.96MiB / 2GiB
+k8s-app-1  cpu=1.10%  mem=74.07MiB / 256MiB
+k8s-db-1  cpu=0.97%  mem=328.3MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=147.5MiB / 11.72GiB
+== t≈160s  10:48:24
+docx-render-convergence-app-1  cpu=49.77%  mem=213MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=2.27%  mem=87.36MiB / 2GiB
+k8s-app-1  cpu=10.70%  mem=80.79MiB / 256MiB
+k8s-db-1  cpu=2.10%  mem=340MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.01%  mem=149.6MiB / 11.72GiB
+== t≈180s  10:48:43
+docx-render-convergence-app-1  cpu=49.33%  mem=213MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=1.57%  mem=87.38MiB / 2GiB
+k8s-app-1  cpu=12.83%  mem=80.72MiB / 256MiB
+k8s-db-1  cpu=2.65%  mem=348.3MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.2MiB / 11.72GiB
+== t≈200s  10:49:02
+docx-render-convergence-app-1  cpu=55.50%  mem=201.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=1.80%  mem=88.5MiB / 2GiB
+k8s-app-1  cpu=15.14%  mem=78.41MiB / 256MiB
+k8s-db-1  cpu=1.82%  mem=348.9MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.3MiB / 11.72GiB
+== t≈220s  10:49:21
+docx-render-convergence-app-1  cpu=49.80%  mem=201.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=2.61%  mem=88.76MiB / 2GiB
+k8s-app-1  cpu=9.15%  mem=78.46MiB / 256MiB
+k8s-db-1  cpu=2.70%  mem=350.1MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.05%  mem=149.5MiB / 11.72GiB
+== t≈240s  10:49:40
+docx-render-convergence-app-1  cpu=53.40%  mem=201.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=2.39%  mem=88.75MiB / 2GiB
+k8s-app-1  cpu=14.44%  mem=78.56MiB / 256MiB
+k8s-db-1  cpu=3.58%  mem=350.8MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.01%  mem=149.5MiB / 11.72GiB
+== t≈260s  10:49:59
+docx-render-convergence-app-1  cpu=53.30%  mem=203.4MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=2.02%  mem=86.88MiB / 2GiB
+k8s-app-1  cpu=10.21%  mem=79.8MiB / 256MiB
+k8s-db-1  cpu=1.46%  mem=350.9MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=148.9MiB / 11.72GiB
+== t≈280s  10:50:18
+docx-render-convergence-app-1  cpu=49.47%  mem=203.4MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=17.78%  mem=116.3MiB / 2GiB
+k8s-app-1  cpu=56.89%  mem=104.3MiB / 256MiB
+k8s-db-1  cpu=7.42%  mem=351.9MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.1MiB / 11.72GiB
+== t≈300s  10:50:37
+docx-render-convergence-app-1  cpu=50.54%  mem=201.7MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=6.75%  mem=116.7MiB / 2GiB
+k8s-app-1  cpu=55.21%  mem=105.8MiB / 256MiB
+k8s-db-1  cpu=6.26%  mem=351.7MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.6MiB / 11.72GiB
+== t≈320s  10:50:56
+docx-render-convergence-app-1  cpu=50.16%  mem=201.7MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=7.44%  mem=117.1MiB / 2GiB
+k8s-app-1  cpu=58.21%  mem=105.8MiB / 256MiB
+k8s-db-1  cpu=8.03%  mem=352.6MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.01%  mem=149.9MiB / 11.72GiB
+== t≈340s  10:51:15
+docx-render-convergence-app-1  cpu=49.97%  mem=203.2MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=7.77%  mem=113.5MiB / 2GiB
+k8s-app-1  cpu=57.13%  mem=107MiB / 256MiB
+k8s-db-1  cpu=6.85%  mem=354.8MiB / 1GiB
+wenzo_copilot_postgres  cpu=2.83%  mem=152.7MiB / 11.72GiB
+== t≈360s  10:51:34
+docx-render-convergence-app-1  cpu=51.92%  mem=203.2MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=8.50%  mem=113.5MiB / 2GiB
+k8s-app-1  cpu=63.75%  mem=107.1MiB / 256MiB
+k8s-db-1  cpu=8.93%  mem=355MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=153.8MiB / 11.72GiB
+== t≈380s  10:51:54
+docx-render-convergence-app-1  cpu=50.07%  mem=203.2MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=11.68%  mem=113.5MiB / 2GiB
+k8s-app-1  cpu=68.72%  mem=107.1MiB / 256MiB
+k8s-db-1  cpu=7.98%  mem=355.2MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=151.7MiB / 11.72GiB
+== t≈400s  10:52:13
+docx-render-convergence-app-1  cpu=57.52%  mem=200.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=30.95%  mem=136.5MiB / 2GiB
+k8s-app-1  cpu=91.97%  mem=138.2MiB / 256MiB
+k8s-db-1  cpu=11.68%  mem=352.7MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.4MiB / 11.72GiB
+== t≈420s  10:52:32
+docx-render-convergence-app-1  cpu=49.16%  mem=200.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=4.91%  mem=284.9MiB / 2GiB
+k8s-app-1  cpu=100.02%  mem=253.7MiB / 256MiB
+k8s-db-1  cpu=2.27%  mem=352.6MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149MiB / 11.72GiB
+== t≈440s  10:52:51
+docx-render-convergence-app-1  cpu=52.30%  mem=203.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=4.99%  mem=287.2MiB / 2GiB
+k8s-app-1  cpu=99.65%  mem=255.3MiB / 256MiB
+k8s-db-1  cpu=2.79%  mem=355.1MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=152.1MiB / 11.72GiB
+== t≈460s  10:53:10
+docx-render-convergence-app-1  cpu=51.49%  mem=203.9MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=5.72%  mem=287.4MiB / 2GiB
+k8s-app-1  cpu=97.81%  mem=255.9MiB / 256MiB
+k8s-db-1  cpu=3.24%  mem=355.1MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=150.4MiB / 11.72GiB
+== t≈480s  10:53:29
+docx-render-convergence-app-1  cpu=52.80%  mem=201.3MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=5.20%  mem=281.4MiB / 2GiB
+k8s-app-1  cpu=100.53%  mem=255.9MiB / 256MiB
+k8s-db-1  cpu=2.67%  mem=352.6MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=148.9MiB / 11.72GiB
+== t≈500s  10:53:48
+docx-render-convergence-app-1  cpu=52.15%  mem=201.3MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=4.85%  mem=282.8MiB / 2GiB
+k8s-app-1  cpu=100.48%  mem=256MiB / 256MiB
+k8s-db-1  cpu=2.78%  mem=353.3MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=149.6MiB / 11.72GiB
+== t≈520s  10:54:07
+docx-render-convergence-app-1  cpu=49.47%  mem=201.3MiB / 11.72GiB
+k8s-locust-run-bfc0628ca260  cpu=4.07%  mem=283.5MiB / 2GiB
+k8s-app-1  cpu=99.29%  mem=255.9MiB / 256MiB
+k8s-db-1  cpu=2.71%  mem=353.3MiB / 1GiB
+wenzo_copilot_postgres  cpu=0.00%  mem=151.4MiB / 11.72GiB

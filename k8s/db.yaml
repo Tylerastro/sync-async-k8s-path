@@ -1,0 +1,313 @@
+# ============================================================
+# db.yaml — PostgreSQL 17-alpine 的完整部署
+# ============================================================
+# 這個檔案包含四個 K8s 物件，順序很重要（kubectl apply -f 會依序建立）：
+#   1. ConfigMap  — 裝 init.sql，掛進 /docker-entrypoint-initdb.d/
+#   2. Secret     — PG 帳號密碼（教學用明文；production 要 Vault 或外部 Secret Operator）
+#   3. Deployment — 跑 postgres:17-alpine 的 Pod
+#   4. Service    — 讓 app Pod 能用固定 DNS 名稱連到 DB
+#
+# ── 為什麼是 Deployment 而不是 StatefulSet？ ──────────────────
+# StatefulSet 適合「有狀態、需要穩定 Pod 名稱、需要 PVC 保留資料」的服務。
+# 在這個壓測 demo 裡，我們刻意「不要資料持久化」：
+#   - compose.yaml 也沒掛 volume，每次 compose down 都回到 seed 狀態，
+#     每輪實驗數據才有可比性（README.md 有說明這個設計決策）。
+#   - 用 Deployment + emptyDir 可以完全複製這個行為。
+# production 的 PostgreSQL 一定要用 StatefulSet + PVC（AWS gp3 / GCE pd-ssd），
+# 原因：StatefulSet 保證 Pod 名稱穩定（postgres-0 永遠是 postgres-0），
+# PVC 讓磁碟不跟著 Pod 生命週期消失。Deployment 的 Pod 名稱是隨機 hash，
+# 搭配 emptyDir 代表 Pod 重啟資料就沒了——壓測教學場景正好，production 絕對不行。
+# ============================================================
+
+---
+# ────────────────────────────────────────────────────────────
+# 1. ConfigMap：把 init.sql 塞進 K8s，讓 DB 啟動時自動執行
+# ────────────────────────────────────────────────────────────
+# ConfigMap 是 K8s 儲存「非敏感設定」的標準方式。
+# 它的 data 欄位可以放純文字（多行也行）。
+# 把 SQL 檔放進 ConfigMap，就不需要把 db/init.sql 烤進 PostgreSQL image，
+# 也不需要另外建 PV 只是為了放初始化腳本。
+# 掛載路徑 /docker-entrypoint-initdb.d/ 是 postgres 官方 image 的約定：
+# 這個目錄裡的 .sql 檔會在資料庫第一次初始化時按字母序執行。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-sql          # 這個名字會在 Deployment 的 volumes 區塊被引用
+  namespace: loadtest        # 必須跟 Deployment 同 namespace，否則掛不到
+  labels:
+    app: db
+    component: init-script
+data:
+  # key 就是掛載後的檔案名稱。
+  # 這裡把 db/init.sql 的內容直接嵌進 ConfigMap。
+  # "|" 是 YAML 的 block scalar 語法，保留換行符號。
+  init.sql: |
+    -- Mini Social Platform schema + seed。
+    -- 跟先前 in-memory 假資料同形狀：50 users / 200 posts。
+
+    CREATE TABLE users (
+        id           int PRIMARY KEY,
+        username     text NOT NULL UNIQUE,
+        display_name text NOT NULL
+    );
+
+    CREATE TABLE posts (
+        id        int PRIMARY KEY,
+        author_id int  NOT NULL REFERENCES users (id),
+        content   text NOT NULL,
+        likes     int  NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE messages (
+        id           bigserial PRIMARY KEY,
+        sender_id    int  NOT NULL REFERENCES users (id),
+        recipient_id int  NOT NULL REFERENCES users (id),
+        content      text NOT NULL,
+        created_at   timestamptz NOT NULL DEFAULT now()
+    );
+
+    INSERT INTO users (id, username, display_name)
+    SELECT i, 'user' || i, 'User ' || i
+    FROM generate_series(1, 50) AS i;
+
+    INSERT INTO posts (id, author_id, content, likes)
+    SELECT i, (i % 50) + 1, 'Post #' || i || ' — hello world', i * 3 % 17
+    FROM generate_series(1, 200) AS i;
+
+---
+# ────────────────────────────────────────────────────────────
+# 2. Secret：PostgreSQL 帳號密碼
+# ────────────────────────────────────────────────────────────
+# Secret 是 K8s 儲存「敏感資料」的機制。
+#
+# stringData vs data 的差異：
+#   - data：值必須是 base64 編碼過的字串（你要自己 echo -n "app" | base64）
+#   - stringData：直接寫明文，K8s 在存入 etcd 前自動幫你 base64 編碼
+# 教學建議：先用 stringData 理解結構，之後進階時再學 data +
+# SealedSecret / External Secret Operator（生產環境的正確做法）。
+#
+# 重要：Secret 只是 base64，不是加密。
+# K8s Secret 的真正安全保障來自：
+#   1. etcd 的 encryption-at-rest（需要叢集管理員開啟）
+#   2. RBAC 限制誰能 kubectl get secret
+#   3. 生產環境用 Vault / AWS Secrets Manager 整合，Secret 內容不進 git
+# 這份 demo 的帳密（app/app）進了 git，是刻意的教學示範——實務禁止。
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials       # 這個名字會在 Deployment 的 env 區塊被引用
+  namespace: loadtest
+  labels:
+    app: db
+    component: credentials
+type: Opaque                 # Opaque 是預設的通用 Secret 類型（預設值，寫出來讓學習者看見）
+stringData:                  # 直接寫明文，K8s 存入 etcd 時自動 base64
+  POSTGRES_USER: app
+  POSTGRES_PASSWORD: app
+  POSTGRES_DB: social
+
+---
+# ────────────────────────────────────────────────────────────
+# 3. Deployment：跑 postgres:17-alpine 的 Pod
+# ────────────────────────────────────────────────────────────
+# Deployment 負責「保持 N 個 Pod 活著」。
+# 如果 Pod 崩潰，Deployment controller 會自動重建一個新的。
+# 這裡 replicas: 1——壓測 baseline 只需要單一 DB 實例，
+# 而且 PostgreSQL 的 HA（高可用）需要 PG Patroni 或 CloudNativePG 這類 Operator，
+# 不是單純加 replicas 就能做到（多個 PG 寫同一份資料會壞掉）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db                   # Deployment 的名稱（用於 kubectl describe deployment db）
+  namespace: loadtest
+  labels:
+    app: db                  # 標籤，方便 kubectl get deploy -l app=db 篩選
+spec:
+  replicas: 1                # 只跑一個 PG Pod。PG HA 需要 Operator，不是加 replicas。
+  selector:
+    matchLabels:
+      app: db                # Deployment 用這個 selector 找它管的 Pod。
+                             # 必須跟 template.metadata.labels 一致，否則 apply 會報錯。
+
+  # ── 更新策略：明確寫出預設值（repo 原則：不靠隱式行為）──────
+  # db 沿用預設的 RollingUpdate（對比 app.yaml 刻意改用 Recreate）。
+  # replicas=1 時 maxSurge 25% 會無條件進位成 1 → 行為是「先建新 Pod、再刪舊」。
+  # DB 可以這樣做的原因：PG 本身不會在 rollout 時讓「連線需求」翻倍
+  # （翻倍的是 app 那邊的 pool 預熱）；但要注意 emptyDir 的資料兩個 Pod 不共享，
+  # 新 Pod 起來就是全新 seed —— 對壓測靶機正好，production 千萬不行。
+  strategy:
+    type: RollingUpdate      # 預設值，明確寫出
+    rollingUpdate:
+      maxSurge: 1            # 預設 25%，replicas=1 時等效於 1，寫成絕對值更清楚
+      maxUnavailable: 0      # 更新期間不允許 0 個可用（先建後刪）
+  template:
+    metadata:
+      labels:
+        app: db              # Pod 本身的標籤——Service 的 selector 也靠這個找到 Pod
+    spec:
+      # terminationGracePeriodSeconds 預設 30s：
+      # Pod 被刪除時，K8s 先送 SIGTERM，等 30s，再送 SIGKILL。
+      # PG 的 30s 夠做 checkpoint、刷 WAL 緩衝。
+      terminationGracePeriodSeconds: 30  # 預設值 30，明確寫出讓學習者知道這個機制存在
+
+      containers:
+        - name: postgres             # container 名稱（一個 Pod 可以有多個 container）
+          image: postgres:17-alpine  # 釘死版本！不用 latest 的原因：
+                                     # latest 在不同時間 pull 到的 image 不同，
+                                     # 壓測數據就不可重現（這是 reproducibility 的基本原則）。
+                                     # 與 compose.yaml 對齊，用同一版。
+
+          # ── 經典坑：Docker 的 command ≠ K8s 的 command ──────────
+          # Docker/compose 的 `command:` 對應的是 image 的 CMD；
+          # K8s 的 `command:` 覆蓋的卻是 ENTRYPOINT，`args:` 才對應 CMD！
+          #
+          #   | 概念             | Dockerfile | compose  | K8s        |
+          #   | ---------------- | ---------- | -------- | ---------- |
+          #   | 進入點（不常改） | ENTRYPOINT | entrypoint | command  |
+          #   | 參數（常改）     | CMD        | command  | args       |
+          #
+          # 我們真實踩過：把 compose 的 command 原樣搬過來寫成 K8s 的 command:，
+          # 結果 docker-entrypoint.sh 被跳過 → 沒有 initdb、init.sql 沒執行、
+          # 「沒有從 root 降權到 postgres」→ PG 直接拒絕啟動：
+          #   "root" execution of the PostgreSQL server is not permitted.
+          # → Pod CrashLoopBackOff，而且 app Pod 連不到 DB 跟著一起 CrashLoop。
+          #
+          # 正確寫法：用 args（entrypoint 保留，只換 CMD）。
+          # -c max_connections=200：
+          #   PG 預設 max_connections=100。
+          #   這個靶機有 sync + async 兩個 engine，
+          #   demo5 的 pool starvation 實驗最大會開到 pool=100（兩個 engine 各 100），
+          #   合計需要 200 條連線——這就是 compose 調到 200 的原因，K8s 要對齊。
+          #   （README.md pool 段落有完整說明）
+          args: ["postgres", "-c", "max_connections=200"]
+
+          ports:
+            - name: postgres         # 給 port 取名，Service 的 targetPort 可以用名稱引用
+              containerPort: 5432    # PG 預設監聽 port，這裡只是文件聲明，不影響實際綁定
+              protocol: TCP          # 預設值 TCP，寫出來讓學習者知道這個欄位存在
+
+          # env：從 Secret 注入環境變數
+          # valueFrom.secretKeyRef 是「讀 Secret 的特定 key」的語法。
+          # 不要直接 value: app——帳密進 YAML 就等於進 git（這個示範本身例外，加了教學說明）。
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials   # Secret 的 metadata.name
+                  key: POSTGRES_USER     # Secret 的 stringData 裡的 key
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_DB
+
+          # ── resources：requests vs limits ──────────────────
+          # requests：K8s scheduler 用這個決定「把 Pod 排到哪個 Node」。
+          #           Node 可用資源 < requests，Pod 就不會被排上去（Pending）。
+          # limits：容器用量的硬上限。超過 memory limit → OOM Kill（立刻）。
+          #         超過 cpu limit → 被 throttle（不會 kill，但會變慢）。
+          #
+          # 對齊 compose.yaml 的設定精神（compose 是 mem_limit: 1g、cpuset: "0,1"）：
+          #   - cpu request "500m" = 0.5 顆 vCPU（夠讓 PG 正常運作）
+          #   - cpu limit "2" = 2 顆 vCPU（compose 給了 core 0,1，兩顆）
+          #   - memory request "256Mi"（讓 scheduler 可以排到大部分 Node）
+          #   - memory limit "1Gi"（對齊 compose 的 mem_limit: 1g）
+          resources:
+            requests:
+              cpu: "500m"      # 500 millicores = 0.5 vCPU。m 代表 milli（千分之一）。
+              memory: "256Mi"  # scheduler 排程用，不是硬上限
+            limits:
+              cpu: "2"         # 2 vCPU 上限（對齊 compose cpuset "0,1" 給兩顆的精神）
+              memory: "1Gi"    # 對齊 compose mem_limit: 1g；超過會 OOM Kill
+
+          # ── readinessProbe：DB 準備好才接流量 ─────────────
+          # readinessProbe 決定「Pod 是否被加入 Service 的 Endpoints」。
+          # 沒有 readinessProbe，K8s 只看 container 有沒有啟動，
+          # 不知道 PG 有沒有真的能接受連線——可能讓 app 在 DB 還沒好時就送流量進來。
+          # pg_isready 是 PG 官方的健康檢查工具，連 PG socket 確認接受連線。
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "social"]
+            initialDelaySeconds: 5   # 容器啟動後等 5s 再開始探測（PG 初始化需要時間）
+            periodSeconds: 5         # 每 5s 探一次（預設值是 10，這裡縮短加快收斂）
+            failureThreshold: 6      # 連失敗 6 次才標記 NotReady（等 30s，夠 PG 完成 init.sql）
+            successThreshold: 1      # 預設值 1：成功 1 次就標記 Ready
+            timeoutSeconds: 3        # 預設值 1，放寬到 3s，避免 pg_isready 超時誤判
+
+          # ── livenessProbe：PG 卡死時自動重啟 Pod ──────────
+          # livenessProbe 決定「Pod 是否需要被重啟」。
+          # 語意：「服務還活著嗎？」和 readinessProbe 不同，它是最後手段。
+          # 失敗 → kubelet 殺掉 container 重啟（重啟策略由 restartPolicy 控制，預設 Always）。
+          # 對 PG 用 pg_isready 也很合適：pg_isready 失敗代表 PG 進程完全掛掉。
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "social"]
+            initialDelaySeconds: 30  # 比 readiness 晚啟動：PG 要先 ready 才有意義 liveness
+            periodSeconds: 10        # 預設值 10，保留預設——liveness 不用探那麼頻繁
+            failureThreshold: 3      # 預設值 3：連失敗 3 次才重啟（30s 後才重啟）
+            successThreshold: 1      # liveness 只能是 1：API 會直接拒絕 >1
+                                     # （"must be 1 for liveness"）——語義上
+                                     # 「活著」不存在連續 N 次成功才算活的場景
+            timeoutSeconds: 3        # 放寬避免誤判
+
+          volumeMounts:
+            # 把 ConfigMap 掛進 /docker-entrypoint-initdb.d/
+            # postgres 官方 image 會在首次初始化時執行這個目錄裡的 .sql 檔
+            - name: init-sql-volume
+              mountPath: /docker-entrypoint-initdb.d/
+              readOnly: true         # init.sql 只需要讀，不需要寫
+
+            # data 目錄用 emptyDir（揮發性存儲）
+            # emptyDir：Pod 生命週期內存在，Pod 刪掉資料就消失。
+            # 刻意設計：每次重啟 DB Pod 都回到 seed 狀態，壓測實驗可重現。
+            # production 這裡要換成 PVC（PersistentVolumeClaim）+ StorageClass。
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data  # PG 預設的資料目錄
+
+      volumes:
+        # 對應 volumeMounts[0].name
+        - name: init-sql-volume
+          configMap:
+            name: db-init-sql        # 引用上面定義的 ConfigMap
+
+        # 對應 volumeMounts[1].name
+        # emptyDir 沒有 medium 欄位預設用 Node 的磁碟；
+        # medium: Memory 改用 tmpfs（放進 RAM），速度更快但佔記憶體——這裡不需要
+        - name: pgdata
+          emptyDir: {}              # {} 表示使用所有預設值（節點磁碟、無大小限制）
+
+---
+# ────────────────────────────────────────────────────────────
+# 4. Service：讓 app Pod 能用固定 DNS 名稱連到 DB
+# ────────────────────────────────────────────────────────────
+# Service 解決了一個核心問題：Pod 的 IP 是動態分配的，Pod 重啟後 IP 就換了。
+# Service 提供一個固定的 ClusterIP 和 DNS 名稱，
+# 流量進來後由 kube-proxy 轉發到 selector 選中的 Pod。
+#
+# ClusterIP（預設值，明確寫出）：
+#   - 只有叢集內部能存取，外部打不進來——DB 不應該對外開放，這是正確選擇。
+#   - DNS 名稱格式：<service-name>.<namespace>.svc.cluster.local
+#     也可以簡寫 <service-name>.<namespace>，同 namespace 還可以直接用 <service-name>
+#   - app Pod 的 DATABASE_URL 用的就是 "db:5432"（同 namespace 可以省略 namespace）
+#     這就是 K8s Service Discovery 的核心機制——app 不需要知道 DB 的 IP。
+apiVersion: v1
+kind: Service
+metadata:
+  name: db                   # 這個名字就是 DNS 名稱！app 的 DATABASE_URL 用 "db:5432" 連到這裡
+  namespace: loadtest
+  labels:
+    app: db
+spec:
+  type: ClusterIP            # 預設值，明確寫出。叢集內部才能存取，DB 不應該對外。
+  selector:
+    app: db                  # 選中 labels.app=db 的 Pod（也就是上面 Deployment 跑的 Pod）
+  ports:
+    - name: postgres
+      port: 5432             # Service 對外（在叢集內）暴露的 port
+      targetPort: postgres   # 轉發到 Pod 的 containerPort（用名稱引用，比數字更易讀）
+      protocol: TCP          # 預設值 TCP

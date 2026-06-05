@@ -1,0 +1,250 @@
+# ============================================================
+# app.yaml — 靶機（FastAPI）的 K8s 部署
+# ============================================================
+# 這個檔案包含兩個 K8s 物件：
+#   1. Deployment — 跑靶機 Pod
+#   2. Service    — 讓 host 上的 Locust 打得到靶機
+#
+# ── OrbStack 特有教學：imagePullPolicy: Never ─────────────────
+# OrbStack 的 K8s 與 Docker daemon 共用同一個 image store（同一個 containerd）。
+# 這意味著 `docker compose build` 建出來的 image 直接就在 K8s 可以存取的地方，
+# 不需要推到 Docker Hub / ECR / 本地 registry。
+#
+# 只要把 imagePullPolicy 設為 Never，kubelet 就不會嘗試從網路拉 image，
+# 直接使用本地已有的那顆——速度快，也不需要 registry 帳號。
+#
+# 反例（讓學習者知道差異）：
+#   - Minikube 要用 `minikube image load <name>` 或 `eval $(minikube docker-env)` 再 build
+#   - Kind 要用 `kind load docker-image <name>`
+#   - 真正的生產叢集（EKS/GKE）一定要推到 registry
+#   OrbStack 是學習 K8s 最省力的本地環境，正是因為省掉了這個步驟。
+#
+# ── replicas: 1 的設計決策 ────────────────────────────────────
+# 壓測 baseline 要固定條件，單 Pod 才能：
+#   1. 和 compose 模式（也是單實例）做 apple-to-apple 對比
+#   2. 清楚看到 event loop / threadpool / pool starvation 各自的瓶頸
+#   3. 未來階段三加 replicas 或 HPA 時，才能說「從 1 Pod 到 N Pod 差在哪裡」
+# HPA（Horizontal Pod Autoscaler）是階段三的事，這裡不碰。
+# ============================================================
+
+---
+# ────────────────────────────────────────────────────────────
+# 1. Deployment：跑靶機 Pod
+# ────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app                  # Deployment 名稱
+  namespace: loadtest
+  labels:
+    app: app                 # 標籤，方便 kubectl get deploy -l app=app 篩選
+spec:
+  replicas: 1                # 【刻意設計】單 Pod baseline。階段三才加 replicas / HPA。
+                             # 多 Pod 會讓 pool starvation / event loop 的行為被稀釋，
+                             # 先把單 Pod 的瓶頸看清楚再擴。
+
+  selector:
+    matchLabels:
+      app: app               # 必須跟 template.metadata.labels 一致
+
+  # ── 更新策略：Recreate（刻意不用預設的 RollingUpdate）────────
+  # 我們真實踩過的 production 級坑：
+  #   這個 app 的 lifespan 會「預熱整個 pool」並長期持有
+  #   POOL_SIZE × 2 engines 條連線 —— pool=100 時一個 Pod 就吃掉
+  #   200 條 = PG max_connections 的全部預算（零餘裕，本身是考點）。
+  #   RollingUpdate + maxUnavailable=0 要求新 Pod Ready 之後舊 Pod 才退場
+  #   → 新舊 Pod 並存的瞬間需要雙倍連線 → 新 Pod 預熱時撞上
+  #     FATAL: sorry, too many clients already
+  #   → 新 Pod CrashLoopBackOff、舊 Pod 不退 → rollout 永久死鎖。
+  #
+  # 教訓：「零停機部署會讓 DB 連線足跡翻倍」。三層解法（由淺入深）：
+  #   1. 治標（本 demo 採用）：Recreate —— 舊 Pod 先死、連線先還、新 Pod 再起。
+  #      代價是部署瞬間有停機（壓測靶機完全可接受；每輪實驗本來就要重啟）。
+  #   2. 治本（連線預算管理）：max_connections ≥ pool×2engines×(replicas+surge)+餘裕。
+  #      本 demo 的 200 = 單 Pod 全額，毫無餘裕 —— 刻意的，這就是考點。
+  #   3. production 正解：PgBouncer 之類的 connection pooler 做 multiplexing，
+  #      app 看到「無限連線」、PG 只看到固定少量真連線。
+  #   （更冷門的 PodReadinessGate 可讓外部 controller 控制 Ready 時機，
+  #     需要 custom controller，超出本 demo 範圍，知道存在即可。）
+  strategy:
+    type: Recreate           # 先殺舊 Pod（連線歸還 PG）再建新 Pod，避免連線預算翻倍
+
+  template:
+    metadata:
+      labels:
+        app: app             # Service selector 靠這個標籤找到 Pod
+
+    spec:
+      terminationGracePeriodSeconds: 30  # 預設值 30s，SIGTERM → 等 30s → SIGKILL
+                                         # uvicorn 收到 SIGTERM 會等現有請求完成再退出
+
+      containers:
+        - name: app
+          # ── 本地 image 策略（OrbStack 特有）─────────────────
+          # image 名稱對齊 compose.yaml 裡 app service 的 image: 欄位（loadtest-app:stage2）。
+          # compose build 完這顆 image 就在本地，OrbStack K8s 直接可用。
+          image: loadtest-app:stage2
+          imagePullPolicy: Never  # 【關鍵】不從網路拉，使用本地 image。
+                                  # 如果本地沒有這顆 image，Pod 會卡在 ErrImageNeverPull，
+                                  # 提醒你要先 `docker compose build`。
+
+          ports:
+            - name: http
+              containerPort: 8000  # uvicorn 監聽的 port（CMD 裡有 --port 8000）
+              protocol: TCP        # 預設值 TCP
+
+          # ── 環境變數：K8s Service Discovery 教學點 ──────────
+          # DATABASE_URL 裡的 "db:5432" 是怎麼解析的？
+          #   K8s 的 CoreDNS 會把 "db"（同 namespace 的 Service 名稱）
+          #   解析成 db Service 的 ClusterIP，然後 kube-proxy 再轉發到 PG Pod。
+          #   完整的 DNS 名稱是 db.loadtest.svc.cluster.local，
+          #   同 namespace 可以簡寫成 db——這就是 K8s 的 Service Discovery 機制。
+          #   應用程式不需要知道 DB 的 Pod IP，只需要知道 Service 名稱。
+          #
+          # 對比 compose 模式：compose 的 app service 用 `db:5432`
+          #   compose 有自己的 DNS（基於 container name），
+          #   K8s 的 DNS 基於 Service name——兩者 URL 剛好一樣，無縫切換。
+          env:
+            - name: DATABASE_URL
+              # 指向 db Service（同 namespace，直接用 Service name "db"）
+              # +psycopg driver 會在 app/db.py 的 DB_URL = BASE_URL.replace(...) 自動補上
+              value: "postgresql://app:app@db:5432/social"
+
+            # DB_POOL_SIZE 從 ConfigMap 來，方便做 demo5 pool starvation 實驗時換值：
+            # 修改 ConfigMap → kubectl rollout restart deployment/app → 新的 pool 大小生效
+            # 不需要重 build image，也不需要改 YAML（只改 ConfigMap）。
+            # 這是 ConfigMap 的典型用法：把「實驗旋鈕」從 image 裡拔出來。
+            - name: DB_POOL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config   # 下面定義的 ConfigMap
+                  key: DB_POOL_SIZE
+
+          # ── resources：K8s cpu limit vs compose cpuset 的差異 ──
+          # compose 的 cpuset: "2,3" 是「把 container 鎖死在 vCPU 2 和 vCPU 3 上」，
+          # 作業系統 scheduler 不會把這個 container 的 thread 排到其他核心。
+          # 這是 Linux cgroups v1 的 cpuset 功能，可以完全隔離，
+          # 確保 demo 的靶機 CPU 不被 Locust 搶走。
+          #
+          # K8s 的 cpu limit 是完全不同的機制：CFS（Completely Fair Scheduler）quota。
+          # cpu limit "2" 的意思是：每個 100ms 的週期，container 最多用 200ms 的 CPU 時間
+          # （可以跨多顆核心累積——這就是為什麼 limit 可以超過 1，是「CPU 時間」而非「核心編號」）。
+          # 超過 quota 就被 throttle（限速），但不鎖定核心，container 可以跑在任何核心上。
+          #
+          # 實際影響（壓測要注意）：
+          # K8s 模式下，靶機和 DB 可能跑在同一顆核心上（只要不超過各自的 quota）。
+          # 這和 compose 的 cpuset 隔離不同。K8s 的 CPU 隔離要靠 Node 的 CPU Manager Policy
+          # 設成 static + Guaranteed QoS（requests == limits），這超出本次 demo 範圍。
+          # 用 K8s 跑壓測時，若懷疑 CPU 搶占，看 kubectl top pod 就能發現。
+          resources:
+            requests:
+              cpu: "500m"      # scheduler 排程用。500m = 0.5 vCPU，夠讓單 worker uvicorn 正常跑
+              memory: "128Mi"  # 靶機 app 本身記憶體需求不大
+            limits:
+              cpu: "2"         # 對齊 compose cpuset "2,3" 給兩顆的精神
+                               # 注意：這是 CFS quota，不是 cpuset，見上方說明
+              memory: "256Mi"  # 對齊 compose mem_limit: 256m
+
+          # ── livenessProbe：打 /healthz ──────────────────────
+          # livenessProbe 語意：「這個 Pod 還活著嗎？」
+          # 失敗 → kubelet 殺掉並重啟 container（不是刪 Pod，是重啟 container）。
+          #
+          # /healthz 刻意不碰 DB（app/main.py 有說明）：
+          # 如果 liveness 打 DB，DB 慢或 pool 耗盡時 liveness 也會 fail，
+          # 導致 K8s 不停重啟 App Pod——這不是 App 本身有問題，是誤判。
+          # liveness 只應該檢查「App 進程本身是否響應」，不應該依賴外部服務。
+          #
+          # demo2 的壓測伏筆（教學要點）：
+          # /experiments/sync-sleep 端點用 blocking sleep 卡死整個 event loop。
+          # 如果大量請求打這個端點，event loop 被佔住，連 /healthz 也回應不了。
+          # livenessProbe 連續失敗 → K8s 重啟 Pod → 新 Pod 啟動 → 又被打 → 又重啟
+          # 這就是 K8s 下的「雪崩」場景，是 demo2 在 K8s 環境的進階實驗。
+          livenessProbe:
+            httpGet:
+              path: /healthz   # app/main.py 的 /healthz 端點：不碰 DB，永遠快
+              port: http       # 引用上面 ports[0].name = http（8000）
+              scheme: HTTP     # 預設值 HTTP（不是 HTTPS）
+            initialDelaySeconds: 10  # 容器啟動到 uvicorn 就緒需要幾秒（等 lifespan 預熱 pool）
+            periodSeconds: 10        # 預設值 10，每 10s 探一次
+            failureThreshold: 3      # 預設值 3，連失敗 3 次才重啟（容許暫時慢）
+            successThreshold: 1      # 預設值 1（liveness 固定是 1）
+            timeoutSeconds: 2        # 預設值 1，放寬到 2s（/healthz 不應該超過 2s）
+
+          # ── readinessProbe：打 /readyz ───────────────────────
+          # readinessProbe 語意：「這個 Pod 準備好接流量了嗎？」
+          # 失敗 → Pod 從 Service 的 Endpoints 清單移除，不再收到新流量。
+          # 不會重啟——Pod 還活著，只是暫時下線。
+          #
+          # /readyz 真的打一次 DB（app/main.py 有說明）：
+          # 確認 DB 連線正常，才把這個 Pod 加進 load balancer 路由。
+          # 這是 readinessProbe 的正確用法：
+          #   - DB 起來前：/readyz 失敗 → Pod 不收流量 → 不會有 DB 連線錯誤
+          #   - DB 起來後：/readyz 成功 → Pod 加入 Service → 開始收流量
+          #
+          # liveness vs readiness 一句話總結：
+          #   liveness = 「死了嗎？」（死了就重啟）
+          #   readiness = 「準備好了嗎？」（沒準備好就暫時不給流量）
+          readinessProbe:
+            httpGet:
+              path: /readyz    # app/main.py 的 /readyz 端點：真打 DB 確認連線
+              port: http
+              scheme: HTTP     # 預設值 HTTP
+            initialDelaySeconds: 5   # 比 liveness 早開始（readiness 失敗不重啟，更安全）
+            periodSeconds: 5         # 每 5s 探一次，讓 Pod 更快加入 Service
+            failureThreshold: 3      # 連失敗 3 次才標記 NotReady（預設值 3）
+            successThreshold: 1      # 預設值 1：成功 1 次就標記 Ready
+            timeoutSeconds: 3        # /readyz 要打 DB，給寬鬆一點的超時
+
+---
+# ── ConfigMap：app 的設定（實驗旋鈕）────────────────────────────
+# 把 DB_POOL_SIZE 放進 ConfigMap 而不是直接寫 value: "5"，
+# 目的是讓 demo5 的 pool starvation 實驗可以「只改 ConfigMap 就換池大小」：
+#   kubectl patch configmap app-config -n loadtest \
+#     --patch '{"data":{"DB_POOL_SIZE":"100"}}'
+#   kubectl rollout restart deployment/app -n loadtest
+# 不需要重 build image，也不需要動 app.yaml。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: loadtest
+  labels:
+    app: app
+data:
+  # DB_POOL_SIZE 是「pool starvation 實驗」的核心旋鈕（demo5）：
+  # 改小 → pool 快速耗盡 → 請求排隊 → p95 飆高
+  # 改大 → pool 充裕 → sync vs async 的差異才能現形（demo4 的教訓）
+  # 預設值 5 和 app/db.py 的 os.getenv("DB_POOL_SIZE", "5") 對齊
+  DB_POOL_SIZE: "5"
+
+---
+# ────────────────────────────────────────────────────────────
+# 2. Service：讓 host 上的 Locust 打得到靶機
+# ────────────────────────────────────────────────────────────
+# 為什麼選 LoadBalancer 而不是 NodePort？
+#   OrbStack 有內建的 LoadBalancer controller（基於 mDNS + host routing）。
+#   用 LoadBalancer type，OrbStack 會自動分配一個 EXTERNAL-IP，
+#   host 上的 Locust 可以直接用 http://<EXTERNAL-IP>:8000 打——
+#   和 compose 模式的 localhost:8000 使用體驗接近。
+#
+#   NodePort 也可以用（會分配 30000-32767 的高位 port），
+#   但要先 `kubectl get nodes -o wide` 找 Node IP 才能打進去，多一步。
+#
+#   在 OrbStack 以外的環境（EKS/GKE），LoadBalancer 會觸發雲端 Load Balancer 建立。
+#   本地 Minikube / Kind 環境要改用 NodePort，或跑 `kubectl port-forward`。
+apiVersion: v1
+kind: Service
+metadata:
+  name: app                  # Service DNS 名稱（同 namespace 內部可用 app:8000 存取）
+  namespace: loadtest
+  labels:
+    app: app
+spec:
+  type: LoadBalancer         # OrbStack 支援，會分配 EXTERNAL-IP 讓 host 直打
+  selector:
+    app: app                 # 選中 labels.app=app 的 Pod
+  ports:
+    - name: http
+      port: 8000             # Service 對外暴露的 port（對齊 compose 的 8000:8000）
+      targetPort: http       # 轉發到 Pod 的 containerPort（用名稱引用）
+      protocol: TCP          # 預設值 TCP

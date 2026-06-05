@@ -36,6 +36,12 @@ services:
 
   app:
     build: .
+    # image 名稱明確宣告，而不是靠 compose 自動推斷（預設會是 <目錄名>-app，即 k8s-app:latest）。
+    # 宣告後，`docker compose build` 建出來的 image 就叫 loadtest-app:stage2，
+    # 和 k8s/app.yaml 裡的 image: loadtest-app:stage2 引用同一顆——
+    # compose 和 K8s 用同一顆 image，確保「部署目標」完全一致（OrbStack 共用 image store 的前提）。
+    # 版本標籤 stage2 對應 roadmap 的階段，未來 stage3 可以改這裡升版。
+    image: loadtest-app:stage2
     cpuset: "2,3"
     mem_limit: 256m
     environment:

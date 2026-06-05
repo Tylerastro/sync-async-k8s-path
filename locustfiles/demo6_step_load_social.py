@@ -7,10 +7,14 @@
     LoadTestShape 自動控制階梯，不用手動調 users。
 
 跑法（容器模式 —— 兩側容器的 fd 上限 nofile=10240 已在 compose 設好，免調 ulimit）
-    DB_POOL_SIZE=100 docker compose up -d --build --wait
+    # export 而不是前綴：接下來的 compose run 也要看到同一個 pool 設定（demo5 的坑）
+    export DB_POOL_SIZE=100
+    docker compose up -d --build --wait
 
     # 階梯由 StepLoadShape 控制，不需要 -u/-r/-t；
-    # 5000 users 必須上多 process（locust 容器有 4 顆核心 → --processes 4）
+    # 5000 users 必須上多 process（locust 容器有 4 顆核心 → --processes 4）。
+    # 坑：--processes 模式下不要加 --csv-full-history —— worker 會繼承這個 flag
+    # 但 --csv prefix 沒跟過去，4 個 worker 啟動即死、master 以 rc=0 假裝收工。
     docker compose run --rm locust -f /mnt/locust/demo6_step_load_social.py \
         --host http://app:8000 --processes 4 --headless
 

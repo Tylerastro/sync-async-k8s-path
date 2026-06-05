@@ -274,7 +274,18 @@ section{padding:84px 0 24px; scroll-margin-top:64px}
 .rule-card b{color:var(--ink)}
 .rule-card code{color:var(--amber); font-size:12.5px}
 
-/* ── 06 數據 ───────────────────────────────────────── */
+/* ── 06 K8s ────────────────────────────────────────── */
+.cmptable{width:100%; border-collapse:collapse; font-size:13px; margin:14px 0 4px}
+.cmptable th,.cmptable td{border:1px solid var(--line); padding:9px 13px; text-align:left; vertical-align:top}
+.cmptable th{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; color:var(--dim); background:var(--panel2); white-space:nowrap}
+.cmptable td{color:var(--muted)}
+.cmptable td:first-child{font-family:var(--mono); font-size:11.5px; color:var(--ink); white-space:nowrap}
+.cmptable b{color:var(--ink)}
+.cmptable code{color:var(--amber); font-size:12px}
+.tblwrap{overflow-x:auto}
+.pitcard .rn{color:var(--red)}
+
+/* ── 07 數據 ───────────────────────────────────────── */
 .datagrid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px}
 .datum{border:1px solid var(--line); background:var(--panel); padding:20px; position:relative}
 .datum .big{font-family:var(--mono); font-size:30px; font-weight:600; color:var(--green); line-height:1.2}
@@ -322,7 +333,7 @@ footer .fin{font-family:var(--mono); font-size:11.5px; color:var(--dim); letter-
   <span class="logo">壓測<b>靶機</b> <span style="color:var(--dim)">//</span> TARGET RANGE</span>
   <div class="links">
     <a href="#briefing">01 簡報</a><a href="#isolation">02 隔離</a><a href="#simulator">03 模擬器</a>
-    <a href="#demos">04 課表</a><a href="#runbook">05 運行</a><a href="#fielddata">06 實測</a>
+    <a href="#demos">04 課表</a><a href="#runbook">05 運行</a><a href="#k8s">06 K8S</a><a href="#fielddata">07 實測</a>
   </div>
   <span class="status"><span class="dot"></span>RANGE&nbsp;HOT</span>
 </nav>
@@ -626,10 +637,124 @@ uv run locust -f locustfiles/demo1_basics.py</pre></div>
   </div>
 </section>
 
-<!-- ════════════════ 06 實測數據 ════════════════ -->
+<!-- ════════════════ 06 K8S ════════════════ -->
+<section id="k8s">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">06 //</span><h2>上 K8s：同一台靶機，換個戰場</h2><div class="rule"></div></div>
+    <p class="lede reveal">
+      階段二（下）：整套攻防搬上本地 K8s（OrbStack 內建叢集，namespace <code style="color:var(--amber)">loadtest</code>）。
+      重點不是會打 kubectl，而是<b>同一份壓測在兩種調度機制下會量出什麼差異</b>——
+      cpuset 換成 CFS quota、docker stats 換成 kubectl top，然後跑同一支 demo4 對答案。
+      manifest 全在 <a href="k8s/">k8s/</a>，每個欄位（連預設值）都有教學註解。
+    </p>
+
+    <div class="arch reveal">
+      <div class="node atk">
+        <div class="role">ATTACKER — 攻擊機</div><h4>Locust @ host</h4>
+        <div class="meta">跑在 host 上（<b>uv run locust</b>）<br>不進 K8s · 沒有 cpuset<br>直打 LoadBalancer EXTERNAL-IP</div>
+      </div>
+      <div class="link"><span>HTTP 火力</span><div class="wire"></div><span>LB → :8000</span></div>
+      <div class="node tgt">
+        <div class="role">TARGET — 靶機 Pod</div><h4>Deployment ×1</h4>
+        <div class="meta">cpu limit <b>2</b>（CFS quota）· mem <b>256Mi</b><br>strategy <b>Recreate</b> · liveness + readiness<br>Service type <b>LoadBalancer</b></div>
+      </div>
+      <div class="link"><span>SQL</span><div class="wire"></div><span>db:5432 / CoreDNS</span></div>
+      <div class="node dbn">
+        <div class="role">DATABASE — db Pod</div><h4>PostgreSQL 17</h4>
+        <div class="meta">Deployment + <b>emptyDir</b>（刻意揮發）<br>max_connections=<b>200</b> · init.sql 進 ConfigMap<br>Service type <b>ClusterIP</b>（不對外）</div>
+      </div>
+    </div>
+
+    <div class="panel reveal">
+      <h3 style="font-family:var(--disp); font-size:16px; margin-bottom:4px; letter-spacing:.04em; color:var(--amber)">compose ↔ K8s 對照表：同一台靶機，兩種調度語言</h3>
+      <div class="tblwrap">
+      <table class="cmptable">
+        <thead><tr><th>變因</th><th style="color:var(--amber)">COMPOSE（階段二上）</th><th style="color:var(--blue)">K8S（階段二下）</th></tr></thead>
+        <tbody>
+          <tr><td>靶機 CPU 隔離</td><td><code>cpuset: "2,3"</code> — 鎖死核心編號，真隔離</td><td><code>cpu limit: "2"</code> — CFS quota：每 100ms 最多 200ms CPU 時間，可跨核但<b>不鎖核</b>，App 和 DB 可能擠同一顆</td></tr>
+          <tr><td>攻擊機位置</td><td>locust 容器，cpuset 4-7</td><td>host 上 <code>uv run locust</code>，與 Docker VM 共擠——量出來的差異來源之一</td></tr>
+          <tr><td>監控</td><td><code>docker stats</code></td><td><code>kubectl top pod -n loadtest</code>（單位是 millicpu：648m = 0.648 vCPU）</td></tr>
+          <tr><td>實驗旋鈕（pool）</td><td><code>export DB_POOL_SIZE=100</code> 再 up</td><td>patch ConfigMap + <code>rollout restart</code>——<b>改了不會自動生效</b>（踩坑 03）</td></tr>
+          <tr><td>重置 DB（鐵則 03）</td><td><code>compose down && up</code></td><td>刪 db Pod 即可：emptyDir 揮發 + init.sql 重跑，回到同一份 seed</td></tr>
+          <tr><td>image 來源</td><td>本地 build</td><td><code>imagePullPolicy: Never</code> — OrbStack K8s 與 Docker 共用 image store，免推 registry（Minikube/Kind 都要多一步 load）</td></tr>
+          <tr><td>服務發現</td><td>compose DNS（container name）</td><td>CoreDNS + Service：<code>db:5432</code> 同名直接沿用，<b>DATABASE_URL 一字不改</b>無縫切換</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="brief" style="margin-top:22px">
+      <div class="panel reveal">
+        <h3>兩支探針，兩個問題</h3>
+        <p>
+          <b>livenessProbe → <code style="color:var(--amber)">/healthz</code>：「死了嗎？」</b>失敗就重啟 container。
+          刻意<b>不碰 DB</b>——如果 liveness 打 DB，pool 耗盡時 K8s 會誤判 App 死了而瘋狂重啟，
+          那不是 App 的問題，是探針設計錯誤。<br><br>
+          <b>readinessProbe → <code style="color:var(--amber)">/readyz</code>：「準備好了嗎？」</b>真打一次 DB，
+          失敗只是暫時從 Service 摘掉、不重啟。DB 還沒好，Pod 就不收流量。
+        </p>
+        <div class="callout" style="margin-top:18px">
+          <b>demo2 的 K8s 進階版：</b>sync-sleep 卡死 event loop → 連 /healthz 都回不了 →
+          liveness 連續 fail → 重啟 → 新 Pod 起來又被打 → 又重啟——這就是 K8s 下的雪崩迴圈。
+          模擬器（03）演的那一幕，在 K8s 裡會被 kubelet 放大。
+        </div>
+      </div>
+      <div class="panel reveal" style="--d:.1s">
+        <h3>單 Pod baseline：押注 → 跑 → 對答案</h3>
+        <div class="tblwrap">
+        <table class="cmptable">
+          <thead><tr><th>demo4 async・100u・delay 100ms・pool 100</th><th>RPS</th><th>p50</th></tr></thead>
+          <tbody>
+            <tr><td>compose（cpuset 隔離）</td><td>512</td><td>200ms</td></tr>
+            <tr><td>K8s 單 Pod（CFS quota）</td><td><b>440</b></td><td><b>180ms</b></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p style="margin-top:10px; font-size:13.5px">
+          RPS 低 ~14%、p50 反而略好——差異來自攻擊機在 host 與 VM 共擠 +
+          kube-proxy/LoadBalancer 多一跳 + CFS 無核心隔離。靶機 CPU 648m，離 limit 2000m 還遠。
+          <b>量級一致 → 單 Pod baseline 成立</b>，「1000 撐住、5000 必崩」就是階段三 HPA 的對照組。
+        </p>
+      </div>
+    </div>
+
+    <div class="rules" style="margin-top:22px">
+      <div class="rule-card pitcard reveal"><span class="rn">踩坑 01 · 真實案發</span><b>K8s 的 <code>command:</code> 蓋掉的是 ENTRYPOINT</b>，<code>args:</code> 才對應 Docker 的 CMD。把 compose 的 command 原樣搬過來 → docker-entrypoint.sh 被跳過 → init.sql 沒跑、PG 以 root 啟動被拒 → db 和 app 一起 CrashLoopBackOff。</div>
+      <div class="rule-card pitcard reveal" style="--d:.06s"><span class="rn">踩坑 02 · 真實案發</span><b>RollingUpdate 讓 DB 連線足跡翻倍。</b>新舊 Pod 並存的瞬間，pool 預熱撞上 <code>too many clients</code> → 新 Pod CrashLoop、舊 Pod 不退 → rollout 永久死鎖。本 demo 用 <b>Recreate</b> 治標，production 正解是 pgbouncer（→ LESSON 05）。</div>
+      <div class="rule-card pitcard reveal" style="--d:.12s"><span class="rn">踩坑 03</span><b>改 ConfigMap 不會自動生效。</b><code>configMapKeyRef</code> 的 env 只在容器啟動時讀一次，必須 <code>kubectl rollout restart</code> 才收斂——驗證方式：<code>kubectl exec ... env | grep DB_POOL_SIZE</code>（LESSON 04 的 K8s 版：先驗證旋鈕接上了）。</div>
+      <div class="rule-card pitcard reveal" style="--d:.18s"><span class="rn">踩坑 04</span><b>kubectl patch 是暫時的。</b>patch 是 imperative 操作，下次 <code>kubectl apply</code> 會把 ConfigMap 蓋回 YAML 宣告的值——<b>declarative 才是真相</b>，實驗完想保留設定就改 manifest 再 apply。</div>
+    </div>
+
+    <div class="cmd reveal" style="margin-top:14px"><button class="copy">COPY</button><pre><span class="c"># image 先 build（OrbStack K8s 直接看得到，免推 registry）</span>
+docker compose build app
+
+<span class="c"># apply 有依賴順序：namespace 先行</span>
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/
+
+<span class="c"># 等 Pod Ready，拿 LoadBalancer 的 EXTERNAL-IP</span>
+kubectl get pods -n loadtest -w
+<span class="y">APP_IP</span>=$(kubectl get svc app -n loadtest -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl http://$APP_IP:8000/healthz
+
+<span class="c"># host 上開打（換 demo 只換 -f，不用重新部署靶機）</span>
+uv run locust -f locustfiles/demo4_sync_vs_async_db.py --host http://$APP_IP:8000 \
+  --headless -u 100 -r 10 -t 60s
+
+<span class="c"># 鐵則 01 的 K8s 版：盯資源用量</span>
+<span class="g">kubectl top pod -n loadtest</span>
+
+<span class="c"># 實驗旋鈕：pool 大小（改完必須 rollout restart 才生效——踩坑 03）</span>
+kubectl patch configmap app-config -n loadtest --patch '{"data":{"DB_POOL_SIZE":"100"}}'
+kubectl rollout restart deployment/app -n loadtest
+kubectl exec -n loadtest deploy/app -- env | grep DB_POOL_SIZE   <span class="c"># 驗證旋鈕接上了</span></pre></div>
+  </div>
+</section>
+
+<!-- ════════════════ 07 實測數據 ════════════════ -->
 <section id="fielddata">
   <div class="wrap">
-    <div class="sechead reveal"><span class="no">06 //</span><h2>已驗證的實測數據</h2><div class="rule"></div></div>
+    <div class="sechead reveal"><span class="no">07 //</span><h2>已驗證的實測數據</h2><div class="rule"></div></div>
     <p class="lede reveal">不是理論值——都是在這台靶機上打出來的（SQLAlchemy ORM stack，攻擊參數見各卡片）。</p>
     <div class="datagrid">
       <div class="datum reveal"><div class="big"><span data-count="24762">0</span><em> RPS</em></div><div class="cap">FastHttpUser 峰值（vs HttpUser 5,921）——同參數差 <b style="color:var(--ink)">4.2×</b>，攻擊機武器很重要</div></div>
@@ -662,7 +787,7 @@ uv run locust -f locustfiles/demo1_basics.py</pre></div>
     </div>
     <p class="fin">
       TARGET RANGE — Mini Social Platform · FastAPI × Locust × PostgreSQL ·
-      詳細文件見 <a href="README.md">README.md</a> 與 <a href="locustfiles/README.md">locustfiles/README.md</a> ·
+      詳細文件見 <a href="README.md">README.md</a>、<a href="locustfiles/README.md">locustfiles/README.md</a> 與 <a href="k8s/README.md">k8s/README.md</a> ·
       API 文件 <span style="color:var(--muted)">http://localhost:8000/docs</span>
     </p>
   </div>

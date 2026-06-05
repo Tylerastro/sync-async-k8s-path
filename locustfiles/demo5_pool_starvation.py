@@ -5,14 +5,19 @@
     固定攻擊參數，只改靶機的 DB_POOL_SIZE，掃出 p95 對 pool 大小的曲線。
     這個 demo 回答「為何 connection pool 重要」與「為何 DB 才是真 bottleneck」。
 
-跑法（攻擊參數固定，重啟靶機換 pool 大小）
-    # 每輪：重啟靶機 → 跑同一個攻擊 → 記錄
+跑法（容器模式；攻擊參數固定，每輪重置 + 換 pool 大小）
+    # 每輪：重置 DB（鐵則 3）→ 換 pool 重啟 → 同一個攻擊 → 記錄
+    docker compose down
+    DB_POOL_SIZE=10 docker compose up -d --build --wait
+    docker compose run --rm locust -f /mnt/locust/demo5_pool_starvation.py \
+        --host http://app:8000 --headless -u 200 -r 100 -t 60s
+
+    # 下一輪換 DB_POOL_SIZE=20 / 50 / 100，攻擊參數不動
+
+跑法（本機模式）
     DB_POOL_SIZE=10  uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
     uv run locust -f locustfiles/demo5_pool_starvation.py --headless -u 200 -r 100 -t 60s
-
-    DB_POOL_SIZE=20  ...（同上攻擊再跑一輪）
-    DB_POOL_SIZE=50  ...
-    DB_POOL_SIZE=100 ...
+    # DB_POOL_SIZE=20 / 50 / 100 同上各跑一輪
 
 預期（delay_ms=50，200 併發；理論 RPS 上限 = pool / 0.05s）
     | DB_POOL_SIZE | RPS 上限 | 預期 p95（≈ users / RPS） |
@@ -26,7 +31,8 @@
 
 進一步思考（senior thinking）
     - pool 開越大越好嗎？PG 每條 connection 都是一個 process，
-      max_connections 撞到會怎樣？（我們 compose 已調到 500，預設只有 100）
+      max_connections 撞到會怎樣？（我們 compose 已調到 200 ——
+      pool=100 時 sync + async 兩組剛好用滿；PG 預設只有 100）
     - 如果 DB 在 delay 期間其實在做真查詢（吃 CPU），開 100 條同時打，
       DB 端會發生什麼事？（劇透：throughput 反而下降 —— 之後階段四用 metrics 驗證）
 

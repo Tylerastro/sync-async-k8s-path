@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壓測靶機訓練場 — Mini Social Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e13; --bg2:#0d1219; --panel:#111922; --panel2:#0f161e;
+  --line:#1e2a36; --line2:#27384a;
+  --ink:#e8edf2; --muted:#8a99a8; --dim:#5c6b7a;
+  --amber:#ffb454; --orange:#ff6b35; --green:#5ce28a; --red:#ff5560; --blue:#62b6ff;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --disp:"Chakra Petch","Noto Sans TC",sans-serif;
+  --body:"Noto Sans TC","PingFang TC",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body);
+  font-size:16px; line-height:1.75; overflow-x:hidden;
+}
+/* ── 背景紋理：網格 + 掃描線 ─────────────────────────── */
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px; opacity:.22;
+  mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,black 0%,transparent 75%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,black 0%,transparent 75%);
+}
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:99;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.07) 2px 4px);
+  mix-blend-mode:multiply;
+}
+::selection{background:var(--amber); color:#0a0e13}
+a{color:var(--amber); text-decoration:none}
+code,pre,.mono{font-family:var(--mono)}
+
+/* ── 頂部導航 ───────────────────────────────────────── */
+nav{
+  position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:24px;
+  padding:14px 28px; background:rgba(10,14,19,.88); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+nav .logo{font-family:var(--disp); font-weight:700; font-size:15px; letter-spacing:.14em; white-space:nowrap}
+nav .logo b{color:var(--amber)}
+nav .links{display:flex; gap:18px; margin-left:auto; flex-wrap:wrap}
+nav .links a{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em; transition:color .2s}
+nav .links a:hover{color:var(--amber)}
+nav .status{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11px; color:var(--green); letter-spacing:.1em; white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.6s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+.wrap{max-width:1140px; margin:0 auto; padding:0 28px; position:relative; z-index:1}
+
+/* ── Hero ───────────────────────────────────────────── */
+.hero{position:relative; padding:96px 0 72px; overflow:hidden}
+#tracers{position:absolute; inset:0; width:100%; height:100%; z-index:0; opacity:.85}
+.hero .wrap{z-index:2}
+.kicker{font-family:var(--mono); font-size:12px; letter-spacing:.32em; color:var(--amber); margin-bottom:20px}
+.kicker::before{content:"◤ "; color:var(--dim)}
+.kicker::after{content:" ◢"; color:var(--dim)}
+h1{
+  font-family:var(--disp); font-weight:900; font-size:clamp(40px,6.4vw,76px);
+  line-height:1.12; letter-spacing:.01em; margin-bottom:8px;
+}
+h1 .hl{color:var(--amber); position:relative}
+h1 .hl::after{
+  content:""; position:absolute; left:0; right:0; bottom:6px; height:10px;
+  background:var(--amber); opacity:.16; z-index:-1;
+}
+.hero .sub{font-size:17px; color:var(--muted); max-width:640px; margin:20px 0 36px}
+.hero .sub b{color:var(--ink)}
+/* 方法論 pipeline */
+.pipeline{display:flex; align-items:center; gap:0; flex-wrap:wrap; margin-bottom:44px}
+.pipeline .step{
+  font-family:var(--mono); font-size:13px; padding:8px 16px; border:1px solid var(--line2);
+  background:var(--panel); color:var(--ink); white-space:nowrap; position:relative;
+}
+.pipeline .arrow{color:var(--amber); font-family:var(--mono); padding:0 10px; animation:nudge 2.2s infinite}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+.pipeline .step small{display:block; font-size:10px; color:var(--dim); letter-spacing:.1em}
+/* 數據帶 */
+.statband{display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--line2); background:var(--panel)}
+.statband .cell{padding:18px 20px; border-right:1px solid var(--line)}
+.statband .cell:last-child{border-right:none}
+.statband .num{font-family:var(--mono); font-size:26px; font-weight:600; color:var(--amber)}
+.statband .num em{font-style:normal; font-size:14px; color:var(--dim)}
+.statband .lbl{font-size:12px; color:var(--muted); letter-spacing:.05em}
+/* 準星 */
+.reticle{
+  position:absolute; right:6%; top:24%; width:170px; height:170px; z-index:1;
+  opacity:.5; animation:retspin 24s linear infinite; pointer-events:none;
+}
+@keyframes retspin{to{transform:rotate(360deg)}}
+
+/* ── 區段框架 ──────────────────────────────────────── */
+section{padding:84px 0 24px; scroll-margin-top:64px}
+.sechead{display:flex; align-items:baseline; gap:18px; margin-bottom:14px}
+.sechead .no{font-family:var(--mono); font-size:13px; color:var(--orange); letter-spacing:.2em}
+.sechead h2{font-family:var(--disp); font-weight:700; font-size:clamp(26px,3.4vw,38px); letter-spacing:.02em}
+.sechead .rule{flex:1; height:1px; background:linear-gradient(90deg,var(--line2),transparent)}
+.lede{color:var(--muted); max-width:760px; margin-bottom:36px}
+.lede b{color:var(--ink)}
+
+/* 面板（含準星角） */
+.panel{position:relative; background:var(--panel); border:1px solid var(--line); padding:26px 28px}
+.panel::before,.panel::after{content:""; position:absolute; width:14px; height:14px; pointer-events:none}
+.panel::before{top:-1px; left:-1px; border-top:2px solid var(--amber); border-left:2px solid var(--amber)}
+.panel::after{bottom:-1px; right:-1px; border-bottom:2px solid var(--amber); border-right:2px solid var(--amber)}
+
+/* ── 01 簡報 ───────────────────────────────────────── */
+.brief{display:grid; grid-template-columns:1.15fr .85fr; gap:22px}
+.brief h3{font-family:var(--disp); font-size:17px; margin-bottom:10px; color:var(--amber); letter-spacing:.04em}
+.brief p{color:var(--muted); font-size:14.5px}
+.brief p b{color:var(--ink)}
+.route{list-style:none; margin-top:6px}
+.route li{
+  display:flex; gap:14px; align-items:flex-start; padding:10px 0;
+  border-bottom:1px dashed var(--line); font-size:14px;
+}
+.route li:last-child{border-bottom:none}
+.route .mk{font-family:var(--mono); font-size:11px; min-width:64px; padding:2px 0; text-align:center; border:1px solid var(--line2); color:var(--dim)}
+.route li.done .mk{color:var(--green); border-color:var(--green)}
+.route li.now .mk{color:#0a0e13; background:var(--amber); border-color:var(--amber); font-weight:600}
+.route li.now{color:var(--ink)} .route li{color:var(--muted)}
+.route .you{font-family:var(--mono); font-size:10px; color:var(--amber); letter-spacing:.15em; animation:blink 1.6s infinite}
+
+/* ── 02 隔離：架構圖 ───────────────────────────────── */
+.arch{display:flex; align-items:stretch; gap:0; margin:8px 0 30px; flex-wrap:wrap}
+.node{
+  flex:1; min-width:200px; background:var(--panel2); border:1px solid var(--line2);
+  padding:18px 20px; position:relative;
+}
+.node .role{font-family:var(--mono); font-size:10px; letter-spacing:.22em; margin-bottom:6px}
+.node h4{font-family:var(--disp); font-size:19px; letter-spacing:.03em}
+.node .meta{font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:10px; line-height:1.9}
+.node .meta b{color:var(--ink); font-weight:500}
+.node.atk{border-top:3px solid var(--orange)} .node.atk .role{color:var(--orange)}
+.node.tgt{border-top:3px solid var(--amber)} .node.tgt .role{color:var(--amber)}
+.node.dbn{border-top:3px solid var(--blue)} .node.dbn .role{color:var(--blue)}
+.link{
+  width:84px; display:flex; flex-direction:column; justify-content:center; align-items:center;
+  font-family:var(--mono); font-size:10px; color:var(--dim); gap:4px;
+}
+.link .wire{
+  width:100%; height:2px;
+  background:repeating-linear-gradient(90deg,var(--amber) 0 8px,transparent 8px 16px);
+  animation:flow 1s linear infinite;
+}
+@keyframes flow{to{background-position:32px 0}}
+/* CPU 核心地圖 */
+.coregrid{display:grid; grid-template-columns:repeat(10,1fr); gap:8px; margin:18px 0 14px}
+.core{
+  aspect-ratio:1; border:1px solid var(--line2); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; font-family:var(--mono);
+  background:var(--panel2); transition:transform .15s;
+}
+.core:hover{transform:translateY(-3px)}
+.core .cid{font-size:15px; font-weight:600}
+.core .cwho{font-size:8.5px; letter-spacing:.12em; color:var(--dim)}
+.core.c-db{border-color:var(--blue); box-shadow:inset 0 0 22px rgba(98,182,255,.10)} .core.c-db .cid{color:var(--blue)}
+.core.c-app{border-color:var(--amber); box-shadow:inset 0 0 22px rgba(255,180,84,.10)} .core.c-app .cid{color:var(--amber)}
+.core.c-lc{border-color:var(--orange); box-shadow:inset 0 0 22px rgba(255,107,53,.12)} .core.c-lc .cid{color:var(--orange)}
+.core.c-lc{animation:heat 2.4s ease-in-out infinite}
+@keyframes heat{0%,100%{box-shadow:inset 0 0 14px rgba(255,107,53,.08)}50%{box-shadow:inset 0 0 30px rgba(255,107,53,.22)}}
+.legend{display:flex; gap:22px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; color:var(--muted)}
+.legend .sw{display:inline-block; width:10px; height:10px; margin-right:7px; border:1px solid}
+.callout{
+  margin-top:26px; padding:16px 20px; border-left:3px solid var(--orange);
+  background:rgba(255,107,53,.06); font-size:14px; color:var(--muted);
+}
+.callout b{color:var(--orange)}
+
+/* ── 03 模擬器 ─────────────────────────────────────── */
+.sim-shell{padding:0; overflow:hidden}
+.sim-bar{
+  display:flex; align-items:center; gap:10px; padding:10px 16px;
+  border-bottom:1px solid var(--line); background:var(--panel2);
+  font-family:var(--mono); font-size:11px; color:var(--dim);
+}
+.sim-bar .tl{display:flex; gap:6px}
+.sim-bar .tl i{width:10px; height:10px; border-radius:50%; background:var(--line2)}
+.sim-bar .tl i:first-child{background:var(--red)}
+.sim-bar .path{margin-left:auto; letter-spacing:.06em}
+#elsim{display:block; width:100%; height:240px; background:#0b1017}
+.sim-ctl{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:16px; border-top:1px solid var(--line); background:var(--panel2);
+}
+.btn{
+  font-family:var(--mono); font-size:12.5px; padding:10px 16px; cursor:pointer;
+  border:1px solid var(--line2); background:transparent; color:var(--ink);
+  letter-spacing:.03em; transition:all .15s;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.35; cursor:not-allowed; transform:none}
+.btn.b-sync{border-color:var(--red); color:var(--red)}
+.btn.b-sync:hover:not(:disabled){background:rgba(255,85,96,.12)}
+.btn.b-async{border-color:var(--green); color:var(--green)}
+.btn.b-async:hover:not(:disabled){background:rgba(92,226,138,.10)}
+.btn.b-ghost{color:var(--muted)}
+.sim-stats{margin-left:auto; display:flex; gap:20px; font-family:var(--mono); font-size:12px; color:var(--muted)}
+.sim-stats b{color:var(--ink); font-weight:600}
+.health{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px;
+  border:1px solid var(--green); color:var(--green); font-family:var(--mono); font-size:11.5px;
+}
+.health.bad{border-color:var(--red); color:var(--red); animation:blink .5s infinite}
+.sim-note{font-size:13.5px; color:var(--muted); margin-top:18px}
+.sim-note code{color:var(--amber); font-size:12.5px}
+
+/* ── 04 Demos ──────────────────────────────────────── */
+.demoline{position:relative}
+.demoline::before{content:""; position:absolute; left:27px; top:10px; bottom:10px; width:1px;
+  background:repeating-linear-gradient(0deg,var(--line2) 0 6px,transparent 6px 12px)}
+.demo{position:relative; margin-bottom:14px; border:1px solid var(--line); background:var(--panel)}
+.demo summary{
+  list-style:none; cursor:pointer; display:flex; align-items:center; gap:18px;
+  padding:16px 22px 16px 14px; user-select:none;
+}
+.demo summary::-webkit-details-marker{display:none}
+.demo .idx{
+  font-family:var(--mono); font-weight:600; font-size:15px; width:42px; height:42px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--amber); color:var(--amber); background:var(--bg);
+  position:relative; z-index:1;
+}
+.demo .t{flex:1; min-width:0}
+.demo .t .file{font-family:var(--mono); font-size:11px; color:var(--dim); letter-spacing:.04em}
+.demo .t h4{font-family:var(--disp); font-size:16.5px; letter-spacing:.02em}
+.demo .drama{
+  font-family:var(--mono); font-size:11px; color:var(--orange); text-align:right;
+  max-width:240px; line-height:1.5; flex-shrink:0;
+}
+.demo .chev{color:var(--dim); transition:transform .25s; font-size:12px}
+.demo[open] .chev{transform:rotate(90deg)}
+.demo[open]{border-color:var(--line2)}
+.demo .body{padding:4px 22px 22px 74px; color:var(--muted); font-size:14px}
+.demo .body p b{color:var(--ink)}
+.demo .body .q{margin-top:12px; padding:10px 14px; border-left:2px solid var(--amber); background:rgba(255,180,84,.05); font-size:13.5px}
+.demo .body .q b{color:var(--amber)}
+
+/* 指令區塊 + 複製 */
+.cmd{position:relative; margin:14px 0; border:1px solid var(--line2); background:#0b1017}
+.cmd pre{padding:14px 16px; overflow-x:auto; font-size:12.5px; line-height:1.8; color:#cdd9e5}
+.cmd pre .c{color:var(--dim)} .cmd pre .y{color:var(--amber)} .cmd pre .g{color:var(--green)}
+.cmd .copy{
+  position:absolute; top:8px; right:8px; font-family:var(--mono); font-size:10.5px;
+  padding:4px 10px; cursor:pointer; border:1px solid var(--line2);
+  background:var(--panel); color:var(--muted); letter-spacing:.06em; transition:all .15s;
+}
+.cmd .copy:hover{color:var(--amber); border-color:var(--amber)}
+.cmd .copy.ok{color:var(--green); border-color:var(--green)}
+
+/* ── 05 Runbook ───────────────────────────────────── */
+.tabs{display:flex; gap:0; margin-bottom:-1px; position:relative; z-index:2}
+.tab{
+  font-family:var(--mono); font-size:12.5px; padding:11px 22px; cursor:pointer;
+  border:1px solid var(--line); border-bottom:none; background:var(--panel2);
+  color:var(--muted); letter-spacing:.05em;
+}
+.tab.on{background:var(--panel); color:var(--amber); border-color:var(--line2)}
+.tabpane{display:none} .tabpane.on{display:block}
+.rules{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:30px}
+.rule-card{border:1px solid var(--line); background:var(--panel2); padding:18px 20px; font-size:14px; color:var(--muted)}
+.rule-card .rn{font-family:var(--mono); color:var(--orange); font-size:11px; letter-spacing:.2em; display:block; margin-bottom:6px}
+.rule-card b{color:var(--ink)}
+.rule-card code{color:var(--amber); font-size:12.5px}
+
+/* ── 06 數據 ───────────────────────────────────────── */
+.datagrid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px}
+.datum{border:1px solid var(--line); background:var(--panel); padding:20px; position:relative}
+.datum .big{font-family:var(--mono); font-size:30px; font-weight:600; color:var(--green); line-height:1.2}
+.datum .big em{font-style:normal; font-size:14px; color:var(--dim)}
+.datum.warn .big{color:var(--orange)}
+.datum .cap{font-size:12.5px; color:var(--muted); margin-top:8px; line-height:1.6}
+.lessons{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+.lesson{border-top:2px solid var(--amber); background:var(--panel2); padding:18px 20px; font-size:13.5px; color:var(--muted)}
+.lesson .ln{font-family:var(--mono); font-size:10.5px; color:var(--amber); letter-spacing:.2em; display:block; margin-bottom:8px}
+.lesson b{color:var(--ink)}
+
+/* ── Footer / roadmap ─────────────────────────────── */
+footer{margin-top:80px; border-top:1px solid var(--line); padding:44px 0 64px; background:var(--bg2)}
+.prog{display:flex; gap:0; margin:22px 0 30px; flex-wrap:wrap}
+.pstep{flex:1; min-width:150px; padding:14px 16px; border:1px solid var(--line); border-left:none; font-family:var(--mono); font-size:11.5px; color:var(--dim)}
+.pstep:first-child{border-left:1px solid var(--line)}
+.pstep .pt{font-size:12.5px; margin-top:2px; color:var(--muted)}
+.pstep.done{border-bottom:2px solid var(--green)} .pstep.done .ps{color:var(--green)}
+.pstep.now{border-bottom:2px solid var(--amber); background:var(--panel)} .pstep.now .ps{color:var(--amber)} .pstep.now .pt{color:var(--ink)}
+footer .fin{font-family:var(--mono); font-size:11.5px; color:var(--dim); letter-spacing:.06em}
+
+/* reveal 動畫 */
+.reveal{opacity:0; transform:translateY(18px)}
+.reveal.in{opacity:1; transform:none; transition:opacity .7s ease,transform .7s ease; transition-delay:var(--d,0s)}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+  .reveal{opacity:1; transform:none}
+}
+@media (max-width:880px){
+  .brief,.rules,.lessons{grid-template-columns:1fr}
+  .datagrid{grid-template-columns:repeat(2,1fr)}
+  .statband{grid-template-columns:repeat(2,1fr)}
+  .statband .cell{border-bottom:1px solid var(--line)}
+  .arch{flex-direction:column} .link{width:100%; height:44px} .link .wire{height:32px; width:2px;
+    background:repeating-linear-gradient(0deg,var(--amber) 0 8px,transparent 8px 16px)}
+  .demo .drama{display:none}
+  .reticle{display:none}
+  nav .links{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">壓測<b>靶機</b> <span style="color:var(--dim)">//</span> TARGET RANGE</span>
+  <div class="links">
+    <a href="#briefing">01 簡報</a><a href="#isolation">02 隔離</a><a href="#simulator">03 模擬器</a>
+    <a href="#demos">04 課表</a><a href="#runbook">05 運行</a><a href="#fielddata">06 實測</a>
+  </div>
+  <span class="status"><span class="dot"></span>RANGE&nbsp;HOT</span>
+</nav>
+
+<!-- ════════════════ HERO ════════════════ -->
+<header class="hero">
+  <canvas id="tracers"></canvas>
+  <svg class="reticle" viewBox="0 0 100 100" fill="none" stroke="#ffb454" stroke-width="1">
+    <circle cx="50" cy="50" r="46" opacity=".5"/><circle cx="50" cy="50" r="30" opacity=".7"/>
+    <circle cx="50" cy="50" r="4" fill="#ffb454" stroke="none" opacity=".8"/>
+    <path d="M50 0v22M50 78v22M0 50h22M78 50h22" opacity=".8"/>
+  </svg>
+  <div class="wrap">
+    <div class="kicker reveal">LOAD-TESTING TARGET RANGE / FASTAPI × LOCUST × POSTGRESQL</div>
+    <h1 class="reveal" style="--d:.08s">打爆它，<br>然後<span class="hl">解釋為什麼</span>。</h1>
+    <p class="sub reveal" style="--d:.16s">
+      這個 repo 是大流量壓測訓練的<b>靶機（Target）</b>：一個刻意做成「能被打出各種瓶頸」的
+      Mini Social Platform。它不是為了上線，是為了讓你在受控環境裡，<b>親手重現</b>
+      event loop 卡死、connection pool 餓死、攻擊機自己先陣亡——然後學會用數據說話。
+    </p>
+    <div class="pipeline reveal" style="--d:.24s">
+      <span class="step">看到 metrics<small>OBSERVE</small></span><span class="arrow">▶</span>
+      <span class="step">提出假設<small>HYPOTHESIZE</small></span><span class="arrow">▶</span>
+      <span class="step">設計實驗<small>EXPERIMENT</small></span><span class="arrow">▶</span>
+      <span class="step">驗證<small>VERIFY</small></span>
+    </div>
+    <div class="statband reveal" style="--d:.32s">
+      <div class="cell"><div class="num" data-count="6">0</div><div class="lbl">教學 demo（循序漸進）</div></div>
+      <div class="cell"><div class="num" data-count="3">0</div><div class="lbl">容器：db / 靶機 / 攻擊機</div></div>
+      <div class="cell"><div class="num" data-count="10">0<em></em></div><div class="lbl">vCPU，cpuset 攻防分核</div></div>
+      <div class="cell"><div class="num" data-count="24762">0<em> RPS</em></div><div class="lbl">FastHttpUser 實測峰值</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════ 01 簡報 ════════════════ -->
+<section id="briefing">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">01 //</span><h2>任務簡報</h2><div class="rule"></div></div>
+    <p class="lede reveal">教科書告訴你 async 比較快、pool 要設大一點。這裡讓你<b>量出來</b>——而且常常量出和直覺相反的結果。</p>
+    <div class="brief">
+      <div class="panel reveal">
+        <h3>為什麼需要一台靶機？</h3>
+        <p>
+          壓測最常見的失敗不是「不會用工具」，而是<b>分不清瓶頸在誰身上</b>：
+          你以為在測伺服器，其實在測攻擊機的 CPU；你以為 async 是魔法，
+          其實 pool 太小時 sync/async 根本沒差。<br><br>
+          靶機把每個變因做成<b>可旋轉的旋鈕</b>：同一個端點有 sync / async 兩個版本（同 driver、同 pool，唯一變因是併發模型）、
+          <code style="color:var(--amber)">DB_POOL_SIZE</code> 控制連線池、
+          <code style="color:var(--amber)">?delay_ms=</code> 模擬慢查詢。
+          一次只轉一顆，差異才能歸因。
+        </p>
+      </div>
+      <div class="panel reveal" style="--d:.1s">
+        <h3>訓練路線</h3>
+        <ul class="route">
+          <li class="done"><span class="mk">階段一</span><span>單機壓測：Async 原理 + Locust 六連 demo</span></li>
+          <li class="now"><span class="mk">階段二</span><span>容器化 + cpuset 攻防隔離 <span class="you">◀ 你在這</span><br><small style="color:var(--dim)">（下半場：本地 K8s 部署）</small></span></li>
+          <li><span class="mk">階段三</span><span>叢集：分散式 Locust + HPA 自動擴展</span></li>
+          <li><span class="mk">階段四</span><span>觀測調校：Observability + Chaos</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 02 隔離 ════════════════ -->
+<section id="isolation">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">02 //</span><h2>攻防隔離：三容器 × cpuset</h2><div class="rule"></div></div>
+    <p class="lede reveal">
+      攻擊機（Locust）打到火力全開時 CPU 會吃滿 100%。如果它和靶機擠在同幾顆核心上，
+      <b>你量到的延遲一半是攻擊機自己造成的</b>。所以整套架構容器化，用 <b>cpuset 把三方鎖在不同核心</b>，互不搶資源。
+    </p>
+
+    <div class="arch reveal">
+      <div class="node atk">
+        <div class="role">ATTACKER — 攻擊機</div><h4>Locust 2.44.1</h4>
+        <div class="meta">cpuset <b>4-7</b>（給最多核）<br>mem <b>2g</b> · Web UI <b>:8089</b><br>locustfiles/ 唯讀掛載</div>
+      </div>
+      <div class="link"><span>HTTP 火力</span><div class="wire"></div><span>http://app:8000</span></div>
+      <div class="node tgt">
+        <div class="role">TARGET — 靶機</div><h4>FastAPI + uvicorn</h4>
+        <div class="meta">cpuset <b>2,3</b> · mem <b>256m</b><br>1 worker · <b>:8000</b><br>sync / async 對照端點</div>
+      </div>
+      <div class="link"><span>SQL</span><div class="wire"></div><span>db:5432</span></div>
+      <div class="node dbn">
+        <div class="role">DATABASE</div><h4>PostgreSQL 17</h4>
+        <div class="meta">cpuset <b>0,1</b> · mem <b>1g</b><br>max_connections=<b>200</b><br>host <b>:5433</b> · down 即重置 seed</div>
+      </div>
+    </div>
+
+    <div class="panel reveal">
+      <h3 style="font-family:var(--disp); font-size:16px; margin-bottom:4px; letter-spacing:.04em">CPU 核心地圖（Docker VM 共 10 vCPU）</h3>
+      <div class="coregrid">
+        <div class="core c-db"><span class="cid">0</span><span class="cwho">DB</span></div>
+        <div class="core c-db"><span class="cid">1</span><span class="cwho">DB</span></div>
+        <div class="core c-app"><span class="cid">2</span><span class="cwho">APP</span></div>
+        <div class="core c-app"><span class="cid">3</span><span class="cwho">APP</span></div>
+        <div class="core c-lc"><span class="cid">4</span><span class="cwho">LOCUST</span></div>
+        <div class="core c-lc"><span class="cid">5</span><span class="cwho">LOCUST</span></div>
+        <div class="core c-lc"><span class="cid">6</span><span class="cwho">LOCUST</span></div>
+        <div class="core c-lc"><span class="cid">7</span><span class="cwho">LOCUST</span></div>
+        <div class="core"><span class="cid">8</span><span class="cwho">FREE</span></div>
+        <div class="core"><span class="cid">9</span><span class="cwho">FREE</span></div>
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="border-color:var(--blue)"></span>db：防守方的資料庫</span>
+        <span><span class="sw" style="border-color:var(--amber)"></span>app：靶機——給 2 核是刻意的（sync threadpool 可跨核，async event loop 只吃得到 1 核，不對稱本身就是考點）</span>
+        <span><span class="sw" style="border-color:var(--orange)"></span>locust：攻擊機——給最多核，它不能先成為瓶頸</span>
+      </div>
+      <div class="callout">
+        <b>macOS 誠實條款：</b>Docker Desktop 的容器全跑在同一台 Linux VM 裡，cpuset 鎖的是 VM 的 vCPU——
+        能保證「靶機與攻擊機不共用核心」，但整台 VM 仍由 macOS hypervisor 排程。要絕對乾淨的數據得攻防分機，那是階段三的事。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 03 模擬器 ════════════════ -->
+<section id="simulator">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">03 //</span><h2>Event Loop 體感模擬器</h2><div class="rule"></div></div>
+    <p class="lede reveal">
+      demo2 的核心戲劇點，先在這裡體感一次：靶機只有 <b>1 個 worker、1 條 event loop</b>。
+      按下紅色按鈕注入一個 <b>blocking sleep</b>，看整條服務（連 <code style="color:var(--amber)">/healthz</code> 都）瞬間凍結；
+      換成綠色的 <b>async sleep</b>，那個請求自己去旁邊等，其他人照常通行。
+    </p>
+    <div class="panel sim-shell reveal">
+      <div class="sim-bar">
+        <span class="tl"><i></i><i></i><i></i></span>
+        <span>uvicorn app.main:app — workers=1</span>
+        <span class="path">cpuset 2,3 / event loop ×1</span>
+      </div>
+      <canvas id="elsim"></canvas>
+      <div class="sim-ctl">
+        <button class="btn b-sync" id="btnSync">▶ GET /experiments/sync-sleep（time.sleep 2.5s）</button>
+        <button class="btn b-async" id="btnAsync">▶ GET /experiments/async-sleep（await 2.5s）</button>
+        <button class="btn b-ghost" id="btnReset">重置</button>
+        <div class="sim-stats">
+          <span id="healthPill" class="health"><span class="dot"></span>/healthz — ok</span>
+          <span>完成 <b id="stDone">0</b></span>
+          <span>排隊 <b id="stQueue">0</b></span>
+        </div>
+      </div>
+    </div>
+    <p class="sim-note reveal">
+      ◤ 對應實驗：<code>A /experiments/sync-sleep</code>（卡死全場）、<code>B /experiments/async-sleep</code>（讓路）、
+      <code>C /experiments/cpu</code>（CPU bound——async 也救不了，模擬器沒演的那課，去 demo2 親手打）。
+    </p>
+  </div>
+</section>
+
+<!-- ════════════════ 04 課表 ════════════════ -->
+<section id="demos">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">04 //</span><h2>六連 Demo 課表</h2><div class="rule"></div></div>
+    <p class="lede reveal">
+      順序是設計過的：<b>先學工具（1）→ 先懂 event loop（2）→ 先排除攻擊機瓶頸（3）→ 才做靶機實驗（4、5）→ 最後整合大流量（6）</b>。
+      跳過 3 直接做 4，你測到的會是 Locust 的極限，不是靶機的。每支腳本的 docstring 都有完整 runbook。
+    </p>
+
+    <div class="demoline">
+      <details class="demo reveal">
+        <summary><span class="idx">01</span>
+          <span class="t"><span class="file">locustfiles/demo1_basics.py</span><h4>Locust 入門 — User / @task / wait_time / Web UI</h4></span>
+          <span class="drama">第一份 p50/p95 報表；RPS ≠ users 數</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>三個核心概念：<b>User</b>（一個虛擬使用者 = 一個 greenlet）、<b>@task(weight)</b>（任務與權重）、<b>wait_time</b>（思考時間，真人不會連發請求）。預設腳本就是它，全套起完直接開打：</p>
+          <div class="cmd"><button class="copy">COPY</button><pre><span class="c"># 全套起來（db + 靶機 + Locust）</span>
+docker compose up -d --build --wait
+open http://localhost:8089   <span class="c"># 10 → 50 → 100 users 各跑一輪</span></pre></div>
+          <p class="q"><b>要能回答：</b>100 users + wait_time(1,3) 的理論 RPS 上限是多少？（100 ÷ 平均 2s ≈ 50 —— RPS 不是 users 數！）</p>
+        </div>
+      </details>
+
+      <details class="demo reveal">
+        <summary><span class="idx">02</span>
+          <span class="t"><span class="file">locustfiles/demo2_event_loop.py</span><h4>Event Loop 卡死實況 — 實驗 A / B / C</h4></span>
+          <span class="drama">一個 time.sleep 凍結全服務，healthz 也死</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>上面模擬器的<b>真槍實彈版</b>。一邊用 Locust 穩定打 <code>/healthz</code>，一邊注入 blocking sleep，看 p95 曲線瞬間起飛；換 async sleep 再看一次。最後打實驗 C（CPU bound）——證明 async 不是萬靈丹。</p>
+          <div class="cmd"><button class="copy">COPY</button><pre>LOCUSTFILE=demo2_event_loop.py docker compose up -d locust</pre></div>
+          <p class="q"><b>要能回答：</b>為什麼一個 <code>time.sleep(1)</code> 連 <code>/healthz</code> 都殺死？K8s liveness probe 此時會發生什麼事？</p>
+        </div>
+      </details>
+
+      <details class="demo reveal">
+        <summary><span class="idx">03</span>
+          <span class="t"><span class="file">locustfiles/demo3_attacker_bottleneck.py</span><h4>攻擊機自己先陣亡 — HttpUser vs FastHttpUser</h4></span>
+          <span class="drama">5,921 → 24,762 RPS：換武器差 4.2 倍</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>300 users 打 <code>/healthz</code>（靶機最快的端點）。同參數下 <b>HttpUser 5,921 RPS、FastHttpUser 24,762 RPS</b>——差的不是靶機，是攻擊機自己的 CPU。Web UI 開了 <code>--class-picker</code>，勾選一個 class 跑一輪，對照。</p>
+          <div class="cmd"><button class="copy">COPY</button><pre>LOCUSTFILE=demo3_attacker_bottleneck.py docker compose up -d locust
+docker stats   <span class="c"># 盯著 locust 容器的 CPU% —— 它先鎖死 100%</span></pre></div>
+          <p class="q"><b>要能回答：</b>怎麼從 metrics 判斷「瓶頸在攻擊機」而不是靶機？（提示：靶機 CPU 還很閒，RPS 卻上不去）</p>
+        </div>
+      </details>
+
+      <details class="demo reveal">
+        <summary><span class="idx">04</span>
+          <span class="t"><span class="file">locustfiles/demo4_sync_vs_async_db.py</span><h4>sync vs async 打真 PG — 核心對照組</h4></span>
+          <span class="drama">同 100 併發：async 512 RPS vs sync 335 RPS</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>同 driver（psycopg3）、同 pool（QueuePool），唯一變因是 <code>create_engine</code> vs <code>create_async_engine</code>。sync 端點佔住 threadpool 的 thread（預設 40 條）等 DB；async 端點等 DB 時 event loop 切去服務別人。</p>
+          <div class="cmd"><button class="copy">COPY</button><pre><span class="c"># 開大 pool（排除 pool 瓶頸，讓併發模型的差異現形）</span>
+DB_POOL_SIZE=100 docker compose up -d app
+LOCUSTFILE=demo4_sync_vs_async_db.py docker compose up -d locust</pre></div>
+          <p class="q"><b>要能回答：</b>sync 版的瓶頸是 threadpool 40 條還是 pool 連線數？怎麼設計實驗分開驗證？</p>
+        </div>
+      </details>
+
+      <details class="demo reveal">
+        <summary><span class="idx">05</span>
+          <span class="t"><span class="file">locustfiles/demo5_pool_starvation.py</span><h4>Pool Starvation — DB_POOL_SIZE 10 → 100 掃描</h4></span>
+          <span class="drama">pool 主宰 p95；async 不是魔法</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>用 <code>?delay_ms=</code> 讓查詢佔住連線，掃描 pool 大小看 p95 怎麼走。pool=10 時 sync/async <b>幾乎沒差</b>（1.28s vs 1.28s）——瓶頸在誰身上，誰就決定 p95。每輪之間重置 DB，seed 一致數據才可比：</p>
+          <div class="cmd"><button class="copy">COPY</button><pre>docker compose down
+DB_POOL_SIZE=10 docker compose up -d --wait    <span class="c"># 下一輪換 20 / 50 / 100</span>
+LOCUSTFILE=demo5_pool_starvation.py docker compose up -d locust</pre></div>
+          <p class="q"><b>要能回答：</b>pool_timeout 30s 到了會發生什麼？demo6 看到的某些 error 就是它。</p>
+        </div>
+      </details>
+
+      <details class="demo reveal">
+        <summary><span class="idx">06</span>
+          <span class="t"><span class="file">locustfiles/demo6_step_load_social.py</span><h4>階梯大流量 — 10 → 100 → 1000 → 5000 混合流量</h4></span>
+          <span class="drama">找到崩潰點 = 階段三 HPA 的 baseline</span><span class="chev">▶</span></summary>
+        <div class="body">
+          <p>整合戰：讀寫混合流量階梯式上量，找出靶機的<b>崩潰點</b>——p95 在哪一階起飛？error 從哪一階出現？是什麼 error？這條曲線就是階段三 HPA 要對抗的敵人。容器的 fd 上限（nofile=10240）已在 compose 設好。</p>
+          <div class="cmd"><button class="copy">COPY</button><pre>LOCUSTFILE=demo6_step_load_social.py docker compose up -d locust
+docker stats   <span class="c"># 三個容器一起盯：誰先死？</span></pre></div>
+          <p class="q"><b>要能回答：</b>崩潰時的第一個 error 是什麼類型（pool timeout？connection refused？OOM？）——它指向哪一層？</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 05 運行 ════════════════ -->
+<section id="runbook">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">05 //</span><h2>Runbook — 如何運行</h2><div class="rule"></div></div>
+
+    <div class="reveal">
+      <div class="tabs">
+        <button class="tab on" data-pane="p-docker">容器模式（壓測用）</button>
+        <button class="tab" data-pane="p-local">本機模式（開發用）</button>
+      </div>
+      <div class="panel">
+        <div class="tabpane on" id="p-docker">
+          <div class="cmd"><button class="copy">COPY</button><pre><span class="c"># 一鍵全上：db + 靶機(:8000) + Locust(:8089)，cpuset / 記憶體限制全套生效</span>
+docker compose up -d --build --wait
+
+<span class="c"># 換 demo 腳本（蓋掉預設的 demo1）</span>
+<span class="y">LOCUSTFILE</span>=demo4_sync_vs_async_db.py docker compose up -d locust
+
+<span class="c"># 實驗旋鈕：pool 大小</span>
+<span class="y">DB_POOL_SIZE</span>=100 docker compose up -d app
+
+<span class="c"># 每輪重置 DB（不掛 volume，down 即回到同一份 seed：50 users / 200 posts）</span>
+docker compose down && docker compose up -d --wait
+
+<span class="c"># headless 一次性跑法（沿用同一組 cpuset / 記憶體限制）</span>
+docker compose run --rm locust \
+  -f /mnt/locust/demo1_basics.py --host http://app:8000 \
+  --headless -u 50 -r 10 -t 60s
+
+<span class="c"># 鐵則 1：同時盯攻防兩側的 CPU / MEM</span>
+<span class="g">docker stats</span></pre></div>
+        </div>
+        <div class="tabpane" id="p-local">
+          <div class="cmd"><button class="copy">COPY</button><pre><span class="c"># 攻防同擠一台機器會互搶 CPU（demo3 的教訓）—— 開發、改 code 時用</span>
+docker compose up -d --wait db        <span class="c"># 只起 PostgreSQL（host port 5433）</span>
+uv sync
+uv run main.py                        <span class="c"># hot-reload，http://127.0.0.1:8000</span>
+
+<span class="c"># 本機壓測：關 reload、固定 1 worker、關 access log</span>
+ulimit -n 10240
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+uv run locust -f locustfiles/demo1_basics.py</pre></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rules">
+      <div class="rule-card reveal"><span class="rn">鐵則 01</span><b>同時監控攻擊方與防守方</b>（CPU / MEM）——分不清瓶頸在誰身上的數據沒有意義。容器模式一行搞定：<code>docker stats</code></div>
+      <div class="rule-card reveal" style="--d:.06s"><span class="rn">鐵則 02</span><b>一次只改一個變因</b>：users 數、pool 大小、sync/async——不要同時動，動了就無法歸因。</div>
+      <div class="rule-card reveal" style="--d:.12s"><span class="rn">鐵則 03</span><b>每輪重置 DB</b>：<code>docker compose down && up</code>，每輪都從同一份 seed 開始，數據才可比。</div>
+      <div class="rule-card reveal" style="--d:.18s"><span class="rn">鐵則 04</span><b>用 Problem-Driven 格式記錄</b>每一輪實驗——寫不出 Lesson 的實驗等於沒做：</div>
+    </div>
+    <div class="cmd reveal" style="margin-top:14px"><button class="copy">COPY</button><pre><span class="y">Problem:</span>    （觀察到什麼異常／想驗證什麼）
+<span class="y">Hypothesis:</span> （你認為的原因）
+<span class="y">Experiment:</span> （改了什麼、攻擊參數）
+<span class="y">Result:</span>     （p50 / p95 / RPS / error rate / 兩側 CPU·MEM）
+<span class="y">Lesson:</span>     （一句話，能教給別人的那種）</pre></div>
+  </div>
+</section>
+
+<!-- ════════════════ 06 實測數據 ════════════════ -->
+<section id="fielddata">
+  <div class="wrap">
+    <div class="sechead reveal"><span class="no">06 //</span><h2>已驗證的實測數據</h2><div class="rule"></div></div>
+    <p class="lede reveal">不是理論值——都是在這台靶機上打出來的（SQLAlchemy ORM stack，100 併發 × delay_ms=100）。</p>
+    <div class="datagrid">
+      <div class="datum reveal"><div class="big"><span data-count="24762">0</span><em> RPS</em></div><div class="cap">FastHttpUser 峰值（vs HttpUser 5,921）——同參數差 <b style="color:var(--ink)">4.2×</b>，攻擊機武器很重要</div></div>
+      <div class="datum reveal" style="--d:.06s"><div class="big"><span data-count="512">0</span><em> vs 335 RPS</em></div><div class="cap">pool=100 時 async vs sync——threadpool 40 條成為 sync 的瓶頸</div></div>
+      <div class="datum warn reveal" style="--d:.12s"><div class="big">1.28<em>s</em> ≈ 1.28<em>s</em></div><div class="cap">pool=10 時 async wall ≈ sync wall——<b style="color:var(--ink)">pool 是共同瓶頸，async 不是魔法</b></div></div>
+      <div class="datum warn reveal" style="--d:.18s"><div class="big">3× → 1.5×</div><div class="cap">換上 ORM 後 async 的領先幅度腰斬——抽象層的 CPU 成本全擠在單一 event loop</div></div>
+    </div>
+    <div class="lessons">
+      <div class="lesson reveal"><span class="ln">LESSON 01</span><b>瓶頸在誰身上，誰就決定 p95。</b>pool 小的時候 sync/async 沒差——先找到瓶頸，再談優化。</div>
+      <div class="lesson reveal" style="--d:.08s"><span class="ln">LESSON 02</span><b>攻擊機也會是瓶頸。</b>xargs+curl 起 100 個 process 的 fork 開銷就吃掉 0.3s，差異完全被淹沒——所以 Locust 要用 FastHttpUser，所以容器要分核。</div>
+      <div class="lesson reveal" style="--d:.16s"><span class="ln">LESSON 03</span><b>ORM 不是免費的。</b>200 筆 row → ORM 物件的序列化是 CPU 工作，async 版全擠在單一 event loop 上無法重疊——抽象層的成本，async 要自己扛。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ FOOTER ════════════════ -->
+<footer>
+  <div class="wrap">
+    <div class="sechead"><span class="no">// </span><h2 style="font-size:22px">Roadmap 進度</h2><div class="rule"></div></div>
+    <div class="prog">
+      <div class="pstep done"><span class="ps">✓ DONE</span><div class="pt">階段一 — 單機壓測（demo1~6 腳本 + 實測）</div></div>
+      <div class="pstep done"><span class="ps">✓ DONE</span><div class="pt">階段二（上）— 容器化 + cpuset 攻防隔離</div></div>
+      <div class="pstep now"><span class="ps">▶ NEXT</span><div class="pt">階段二（下）— 本地 K8s 部署</div></div>
+      <div class="pstep"><span class="ps">◌ TODO</span><div class="pt">階段三 — 分散式 Locust + HPA</div></div>
+      <div class="pstep"><span class="ps">◌ TODO</span><div class="pt">階段四 — Observability + Chaos</div></div>
+    </div>
+    <p class="fin">
+      TARGET RANGE — Mini Social Platform · FastAPI × Locust × PostgreSQL ·
+      詳細文件見 <a href="README.md">README.md</a> 與 <a href="locustfiles/README.md">locustfiles/README.md</a> ·
+      API 文件 <span style="color:var(--muted)">http://localhost:8000/docs</span>
+    </p>
+  </div>
+</footer>
+
+<script>
+/* ════════════════ 共用：reveal + 數字滾動 ════════════════ */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add('in');
+  e.target.querySelectorAll('[data-count]').forEach(animateCount);
+  if (e.target.matches('[data-count]')) animateCount(e.target);
+  io.unobserve(e.target);
+}), {threshold:.18});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+function animateCount(el){
+  if (el._ran) return; el._ran = true;
+  const target = +el.dataset.count, t0 = performance.now(), dur = reduced ? 0 : 1100;
+  const em = el.querySelector('em'), suffix = em ? em.outerHTML : '';
+  (function tick(t){
+    const k = dur ? Math.min(1,(t-t0)/dur) : 1, e = 1-Math.pow(1-k,3);
+    el.innerHTML = Math.round(target*e).toLocaleString() + suffix;
+    if (k<1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ════════════════ 複製按鈕 ════════════════ */
+document.querySelectorAll('.cmd').forEach(box => {
+  const btn = box.querySelector('.copy');
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(box.querySelector('pre').innerText).then(() => {
+      btn.textContent = '已複製 ✓'; btn.classList.add('ok');
+      setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('ok'); }, 1400);
+    });
+  });
+});
+
+/* ════════════════ Tabs ════════════════ */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x===t));
+  document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('on', p.id===t.dataset.pane));
+}));
+
+/* ════════════════ Hero 曳光彈 ════════════════ */
+(() => {
+  const cv = document.getElementById('tracers'), ctx = cv.getContext('2d');
+  if (reduced) return;
+  let W, H, shots = [], flashes = [];
+  const fit = () => { const r = cv.getBoundingClientRect();
+    W = cv.width = r.width * devicePixelRatio; H = cv.height = r.height * devicePixelRatio; };
+  fit(); addEventListener('resize', fit);
+  const impactX = () => W * .80;
+  setInterval(() => { if (document.hidden || shots.length > 26) return;
+    shots.push({ x: -80*devicePixelRatio, y: H*(.15+Math.random()*.62),
+      v: (5+Math.random()*4)*devicePixelRatio, len: (90+Math.random()*120)*devicePixelRatio });
+  }, 240);
+  (function frame(){
+    ctx.clearRect(0,0,W,H);
+    shots = shots.filter(s => s.x - s.len < W);
+    for (const s of shots){
+      s.x += s.v;
+      const g = ctx.createLinearGradient(s.x-s.len, s.y, s.x, s.y);
+      g.addColorStop(0,'rgba(255,180,84,0)'); g.addColorStop(1,'rgba(255,180,84,.5)');
+      ctx.strokeStyle = g; ctx.lineWidth = 1.4*devicePixelRatio;
+      ctx.beginPath(); ctx.moveTo(s.x-s.len, s.y); ctx.lineTo(s.x, s.y); ctx.stroke();
+      if (!s.hit && s.x >= impactX()){ s.hit = true; flashes.push({x:s.x, y:s.y, r:2, a:.55}); }
+    }
+    flashes = flashes.filter(f => f.a > .02);
+    for (const f of flashes){
+      f.r += 1.7*devicePixelRatio; f.a *= .9;
+      ctx.strokeStyle = `rgba(255,140,60,${f.a})`; ctx.lineWidth = devicePixelRatio;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2); ctx.stroke();
+    }
+    requestAnimationFrame(frame);
+  })();
+})();
+
+/* ════════════════ Event Loop 模擬器 ════════════════ */
+(() => {
+  const cv = document.getElementById('elsim'), ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const pill = $('healthPill'), stDone = $('stDone'), stQueue = $('stQueue');
+  let W, H, D = devicePixelRatio;
+  const fit = () => { const r = cv.getBoundingClientRect();
+    W = cv.width = r.width * D; H = cv.height = 240 * D; };
+  fit(); addEventListener('resize', fit);
+
+  const C = { norm:'#ffb454', health:'#62b6ff', async:'#5ce28a', done:'#5ce28a', blocked:'#ff5560' };
+  const PROC_MS = 90, BLOCK_MS = 2500;
+  let dots, queue, current, procUntil, blockedUntil, parked, done, lastHealth, healthLat, spin;
+
+  function reset(){
+    dots = []; queue = []; current = null; parked = [];
+    procUntil = 0; blockedUntil = 0; done = 0; spin = 0;
+    lastHealth = performance.now(); healthLat = 6;
+  }
+  reset();
+
+  const loopX = () => W*.52, loopY = () => H*.5;
+  function spawn(kind){
+    if (dots.length > 90) return;
+    dots.push({ kind, born: performance.now(),
+      x: -16*D, y: H*(.25+Math.random()*.5), state:'in', wake:0 });
+  }
+  let spawnT = setInterval(() => !document.hidden && spawn('norm'), 380);
+  let healthT = setInterval(() => !document.hidden && spawn('health'), 1000);
+
+  function update(now, dt){
+    const blocked = now < blockedUntil;
+    spin += dt * (blocked ? 0 : .004);
+    for (const d of dots){
+      if (d.state === 'in'){           // 飛向佇列
+        if (!queue.includes(d)) queue.push(d);
+        const i = queue.indexOf(d);
+        const tx = loopX() - (34 + i*16)*D, ty = loopY();
+        const k = Math.min(1, dt*.018);
+        d.x += (tx-d.x)*k; d.y += (ty-d.y)*k;
+      } else if (d.state === 'parked'){ // async 等待：繞軌道
+        const a = now*.004 + d.phase;
+        d.x = loopX() + Math.cos(a)*46*D; d.y = loopY() - 52*D + Math.sin(a)*14*D;
+        if (now >= d.wake && !blocked && !current){ d.state='in'; queue.unshift(d); }
+      } else if (d.state === 'done'){   // 飛出右側
+        d.x += dt*.42*D;
+      }
+    }
+    // event loop 取件（被 block 時完全停擺 —— 這就是重點）
+    if (!blocked && !current && queue.length){
+      current = queue.shift(); procUntil = now + PROC_MS;
+      current.state = 'proc'; current.x = loopX(); current.y = loopY();
+    }
+    if (current && !blocked && now >= procUntil){
+      const d = current; current = null;
+      if (d.kind === 'async' && !d.slept){   // async sleep：去旁邊軌道等
+        d.slept = true; d.state = 'parked'; d.wake = now + BLOCK_MS; d.phase = Math.random()*6.28;
+      } else {
+        d.state = 'done'; done++;
+        if (d.kind === 'health'){ lastHealth = now; healthLat = Math.round(now - d.born); }
+      }
+    }
+    dots = dots.filter(d => d.x < W + 30*D);
+    queue = queue.filter(d => dots.includes(d));
+    // 儀表
+    stDone.textContent = done; stQueue.textContent = queue.length + (current?1:0);
+    const stale = now - lastHealth;
+    if (blocked || stale > 1600){
+      pill.className = 'health bad'; pill.innerHTML = '<span class="dot"></span>/healthz — TIMEOUT';
+    } else {
+      pill.className = 'health'; pill.innerHTML = `<span class="dot"></span>/healthz — ${Math.min(healthLat, 999)}ms`;
+    }
+  }
+
+  function draw(now){
+    ctx.clearRect(0,0,W,H);
+    const blocked = now < blockedUntil;
+    // 標籤與分區線
+    ctx.font = `${10*D}px "IBM Plex Mono",monospace`; ctx.fillStyle = '#5c6b7a';
+    ctx.fillText('CLIENTS', 14*D, 20*D);
+    ctx.fillText('RESPONSES', W-86*D, 20*D);
+    ctx.textAlign='center';
+    ctx.fillStyle = blocked ? '#ff5560' : '#8a99a8';
+    ctx.fillText(blocked ? 'EVENT LOOP — time.sleep() 中，整條服務凍結' : 'EVENT LOOP（單一執行緒）', loopX(), H-14*D);
+    ctx.textAlign='left';
+    // event loop 核心：旋轉方框
+    const r = 17*D;
+    ctx.save(); ctx.translate(loopX(), loopY()); ctx.rotate(spin%6.28);
+    ctx.strokeStyle = blocked ? C.blocked : C.norm; ctx.lineWidth = 2*D;
+    ctx.strokeRect(-r,-r,r*2,r*2);
+    ctx.rotate(.785); ctx.globalAlpha=.4; ctx.strokeRect(-r,-r,r*2,r*2);
+    ctx.restore();
+    if (blocked){ // 倒數
+      ctx.fillStyle = C.blocked; ctx.font = `600 ${11*D}px "IBM Plex Mono",monospace`; ctx.textAlign='center';
+      ctx.fillText(((blockedUntil-now)/1000).toFixed(1)+'s', loopX(), loopY()-26*D);
+      ctx.textAlign='left';
+    }
+    // dots（current 仍在 dots 裡，state='proc'）
+    for (const d of dots){
+      const col = d.state==='done' ? C.done : d.kind==='health' ? C.health : d.kind==='async' ? C.async : C.norm;
+      ctx.fillStyle = col;
+      ctx.shadowColor = col; ctx.shadowBlur = 8*D;
+      ctx.beginPath(); ctx.arc(d.x, d.y, (d===current?6:4.2)*D, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      if (d.state==='parked'){
+        ctx.strokeStyle = col; ctx.globalAlpha=.35;
+        ctx.beginPath(); ctx.arc(loopX(), loopY()-52*D, 46*D, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+    }
+    // 圖例
+    ctx.font = `${9.5*D}px "IBM Plex Mono",monospace`;
+    const lg = [['● 一般請求',C.norm],['● /healthz',C.health],['● async sleep 中',C.async]];
+    let lx = 14*D;
+    for (const [t,c] of lg){ ctx.fillStyle=c; ctx.fillText(t, lx, H-14*D); lx += ctx.measureText(t).width + 18*D; }
+  }
+
+  let last = performance.now();
+  (function frame(now){
+    const dt = Math.min(50, now-last); last = now;
+    update(now, dt); draw(now);   // 模擬器是核心教學內容，reduced-motion 下仍保留
+    requestAnimationFrame(frame);
+  })(last);
+
+  // 控制
+  const btnSync = $('btnSync');
+  btnSync.addEventListener('click', () => {
+    blockedUntil = performance.now() + BLOCK_MS;
+    btnSync.disabled = true;
+    setTimeout(() => btnSync.disabled = false, BLOCK_MS);
+  });
+  $('btnAsync').addEventListener('click', () => spawn('async'));
+  $('btnReset').addEventListener('click', reset);
+})();
+</script>
+</body>
+</html>

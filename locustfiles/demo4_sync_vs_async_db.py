@@ -9,11 +9,18 @@
                 sync 因 threadpool 排隊，p95 約為 async 的 3 倍
     （已用 curl 在 100 併發初驗過：async p95=119ms vs sync p95=342ms）
 
-跑法
+跑法（容器模式）
     # 靶機要開大 pool（讓 threadpool 成為 sync 的瓶頸，而不是 pool）
-    DB_POOL_SIZE=100 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+    DB_POOL_SIZE=100 docker compose up -d --build --wait
 
     # 兩輪同參數，只換 class
+    docker compose run --rm locust -f /mnt/locust/demo4_sync_vs_async_db.py AsyncPostsUser \
+        --host http://app:8000 --headless -u 100 -r 50 -t 60s
+    docker compose run --rm locust -f /mnt/locust/demo4_sync_vs_async_db.py SyncPostsUser \
+        --host http://app:8000 --headless -u 100 -r 50 -t 60s
+
+跑法（本機模式）
+    DB_POOL_SIZE=100 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
     uv run locust -f locustfiles/demo4_sync_vs_async_db.py AsyncPostsUser --headless -u 100 -r 50 -t 60s
     uv run locust -f locustfiles/demo4_sync_vs_async_db.py SyncPostsUser  --headless -u 100 -r 50 -t 60s
 

@@ -7,13 +7,35 @@
 
 ## 快速開始
 
+### 容器模式（壓測用 —— 攻防隔離、各自鎖核心）
+
 ```bash
-docker compose up -d --wait   # 起 PostgreSQL（host port 5433），自動建表 + seed
-uv sync
-uv run main.py                # 開發模式（hot-reload），http://127.0.0.1:8000
+docker compose up -d --build --wait   # db + 靶機(:8000) + Locust(:8089) 一次到位
 ```
 
-壓測時改用（關掉 reload、固定 1 worker，先看清單一 event loop 的行為）：
+三個容器用 `cpuset` 鎖在不同核心（db=0,1 / 靶機=2,3 / 攻擊機=4-7）並限制記憶體，
+攻擊機吃滿 CPU 也搶不走靶機的資源 —— 細節與 macOS 注意事項見 `compose.yaml` 開頭註解。
+
+- 開打：http://localhost:8089 （Locust Web UI，`--class-picker` 可勾選 User class）
+- 換 demo 腳本：`LOCUSTFILE=demo4_sync_vs_async_db.py docker compose up -d locust`
+- 監控兩側資源（鐵則 1）：`docker stats`
+- headless 一次性跑法：
+
+```bash
+docker compose run --rm locust \
+  -f /mnt/locust/demo1_basics.py --host http://app:8000 \
+  --headless -u 50 -r 10 -t 60s
+```
+
+### 本機模式（開發用，hot-reload）
+
+```bash
+docker compose up -d --wait db   # 只起 PostgreSQL（host port 5433）
+uv sync
+uv run main.py                   # http://127.0.0.1:8000
+```
+
+本機壓測時改用（關掉 reload、固定 1 worker，先看清單一 event loop 的行為）：
 
 ```bash
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
@@ -28,8 +50,9 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 
 | 變數 | 預設 | 用途 |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgresql://app:app@localhost:5433/social` | PG 連線字串（會自動補上 `+psycopg` driver） |
-| `DB_POOL_SIZE` | `5` | 兩個 engine 的 `pool_size`（配 `max_overflow=0` → 固定大小）——「pool starvation」實驗的主旋鈕 |
+| `DATABASE_URL` | `postgresql://app:app@localhost:5433/social` | PG 連線字串（會自動補上 `+psycopg` driver）；容器模式由 compose 指到 `db:5432` |
+| `DB_POOL_SIZE` | `5` | 兩個 engine 的 `pool_size`（配 `max_overflow=0` → 固定大小）——「pool starvation」實驗的主旋鈕。容器模式：`DB_POOL_SIZE=100 docker compose up -d app` |
+| `LOCUSTFILE` | `demo1_basics.py` | （僅容器模式）Locust 容器要載入的 demo 腳本檔名 |
 
 ## 兩個 SQLAlchemy Engine（核心對照組）
 
@@ -100,12 +123,15 @@ Lesson 3:   ORM 不是免費的。換 SQLAlchemy 後 async 的絕對延遲變高
 > 可跟現在的 ORM 版對比，量化「ORM 抽象層的代價」。
 
 注意：PG 預設 `max_connections=100`，兩個 engine 各開 100 會撞死，
-compose 已調到 500（production 不會這樣做，這本身是考點）。
+compose 已調到 200 —— pool=100 實驗時 sync + async 兩組剛好用滿
+（production 不會這樣做，這本身是考點）。
 
 ## 專案結構
 
 ```
-compose.yaml             # PostgreSQL 17（host port 5433）
+index.html               # 互動式介紹頁（open index.html）：repo 意義、demo 課表、runbook、event loop 模擬器
+compose.yaml             # db + 靶機 + Locust 三容器，cpuset 鎖核心 + 記憶體上限
+Dockerfile               # 靶機 multi-stage build（uv 裝依賴 → python slim 跑）
 db/init.sql              # schema + seed（50 users / 200 posts）
 app/
 ├── main.py              # FastAPI app、lifespan（預熱 pool + dispose）、healthz/readyz
@@ -137,4 +163,5 @@ demo3（300 users 打 /healthz）:
 ## 下一步（對齊 Roadmap）
 
 - [ ] 跑完 demo1~6 並用 Problem-Driven 格式記錄（demo5 的 p95 曲線、demo6 的崩潰點）
-- [ ] 階段二：Dockerfile（multi-stage，靶機 + Locust 都容器化）+ 本地 K8s 部署
+- [x] 階段二（上）：Dockerfile（multi-stage）+ compose 三容器化，cpuset 攻防隔離
+- [ ] 階段二（下）：本地 K8s 部署

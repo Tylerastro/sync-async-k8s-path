@@ -17,8 +17,31 @@
 
 ## 共通前置
 
+### 容器模式（推薦 —— 攻防各自鎖核心，互不搶資源）
+
 ```bash
-docker compose up -d --wait                  # DB（host port 5433）
+docker compose up -d --build --wait          # db + 靶機 + Locust 全上
+open http://localhost:8089                   # Web UI 開打（class-picker 可勾 User class）
+
+# 換 demo 腳本（蓋掉預設的 demo1）：
+LOCUSTFILE=demo4_sync_vs_async_db.py docker compose up -d locust
+
+# demo4 之後要開大 pool：
+DB_POOL_SIZE=100 docker compose up -d app
+
+# headless 一次性跑法（沿用同一組 cpuset / 記憶體限制）：
+docker compose run --rm locust \
+  -f /mnt/locust/demo1_basics.py --host http://app:8000 \
+  --headless -u 50 -r 10 -t 60s
+```
+
+> 容器內的 ulimit、fd 數已在 compose 設好。每支腳本的 docstring runbook
+> 都分「容器模式 / 本機模式」兩段指令，照抄對應模式的那段即可。
+
+### 本機模式（攻防同擠一台機器，會互搶 CPU —— demo3 的教訓）
+
+```bash
+docker compose up -d --wait db               # 只起 DB（host port 5433）
 ulimit -n 10240                              # demo6 必須；其他 demo 建議一起開
 
 # 靶機：壓測一律關 access log、預設 1 worker
@@ -30,7 +53,7 @@ DB_POOL_SIZE=100 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-acc
 
 ## 鐵則
 
-1. **同時監控攻擊方與防守方**（CPU / MEM）——分不清瓶頸在誰身上的數據沒有意義
+1. **同時監控攻擊方與防守方**（CPU / MEM）——分不清瓶頸在誰身上的數據沒有意義（容器模式一行搞定：`docker stats`）
 2. **一次只改一個變因**：users 數、pool 大小、sync/async，不要同時動
 3. **每輪重置 DB**（`docker compose down && docker compose up -d --wait`），seed 一致數據才可比
 4. demo 結果一律用 Problem-Driven 格式記錄：

@@ -6,15 +6,23 @@
     - @task(weight)：任務與權重，read_posts(3) : read_users(1) = 75% : 25%
     - wait_time：每個任務之間的思考時間（真人不會連發請求）
 
-跑法
-    # 1. 起靶機（壓測一律關 access log、固定 1 worker）
+跑法（容器模式 —— 攻防各自鎖核心，推薦）
+    # demo1 是 compose 的預設腳本，三容器起來就能打
+    docker compose up -d --build --wait
+
+    # Web UI 模式（教學首選）：開 http://localhost:8089
+    # Headless 模式（之後自動化用）：
+    docker compose run --rm locust \
+        -f /mnt/locust/demo1_basics.py --host http://app:8000 \
+        --headless -u 50 -r 10 -t 60s
+
+跑法（本機模式 —— 攻防同擠一台機器，會互搶 CPU）
+    # 1. 起 DB + 靶機（壓測一律關 access log、固定 1 worker）
+    docker compose up -d --wait db
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-    # 2a. Web UI 模式（教學首選，開 http://localhost:8089）
-    uv run locust -f locustfiles/demo1_basics.py
-
-    # 2b. Headless 模式（之後自動化用）
-    uv run locust -f locustfiles/demo1_basics.py --headless -u 50 -r 10 -t 60s
+    # 2a. Web UI：uv run locust -f locustfiles/demo1_basics.py
+    # 2b. Headless：uv run locust -f locustfiles/demo1_basics.py --headless -u 50 -r 10 -t 60s
 
 觀察
     - Web UI 的 Charts 分頁：RPS 與 p50/p95 曲線

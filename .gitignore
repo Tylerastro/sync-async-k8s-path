@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Claude Code agent 工作記憶（個人狀態，不進版控；agents/ 定義會進）
+.claude/agent-memory/

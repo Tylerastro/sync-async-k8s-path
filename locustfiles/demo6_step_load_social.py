@@ -6,18 +6,27 @@
         滑 feed (10) : 看用戶 (3) : 發訊息 (1)
     LoadTestShape 自動控制階梯，不用手動調 users。
 
-跑法
+跑法（容器模式 —— 兩側容器的 fd 上限 nofile=10240 已在 compose 設好，免調 ulimit）
+    DB_POOL_SIZE=100 docker compose up -d --build --wait
+
+    # 階梯由 StepLoadShape 控制，不需要 -u/-r/-t；
+    # 5000 users 必須上多 process（locust 容器有 4 顆核心 → --processes 4）
+    docker compose run --rm locust -f /mnt/locust/demo6_step_load_social.py \
+        --host http://app:8000 --processes 4 --headless
+
+    # 想看圖表就用 Web UI 模式（教學示範建議）：
+    # 先停掉預設的 locust 服務（讓出 8089），再帶 port 起一次性的 run
+    docker compose stop locust
+    docker compose run --rm --service-ports locust \
+        -f /mnt/locust/demo6_step_load_social.py --host http://app:8000 --processes 4
+
+跑法（本機模式）
     # macOS 預設 ulimit -n 只有 256，5000 連線直接撞「Too many open files」
     # （Roadmap 階段 4-2 的系統限制，現在就會遇到！）
     ulimit -n 10240
 
     DB_POOL_SIZE=100 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
-
-    # 階梯由 StepLoadShape 控制，不需要 -u/-r/-t；5000 users 必須上多 process
     uv run locust -f locustfiles/demo6_step_load_social.py --processes 4 --headless
-
-    # 想看圖表就用 Web UI 模式（教學示範建議）
-    uv run locust -f locustfiles/demo6_step_load_social.py --processes 4
 
 每一階記錄（Roadmap 指定欄位）
     p50 / p95 / throughput / error rate / 靶機 CPU·MEM / 攻擊機 CPU·MEM

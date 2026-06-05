@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.py[oc]
+.gitignore
+.dockerignore
+.python-version
+README.md
+LICENSE
+compose.yaml
+db/
+locustfiles/
+main.py

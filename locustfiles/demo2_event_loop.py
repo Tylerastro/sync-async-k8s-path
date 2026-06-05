@@ -10,7 +10,16 @@
     | A    | SyncSleepUser  | /experiments/sync-sleep?seconds=1  | RPS ≈ 1！p95 暴漲到數十秒   |
     | C    | CpuUser        | /experiments/cpu?n=30              | RPS ≈ 1/0.1s ≈ 10，全部排隊 |
 
-跑法（一次跑一個 class，class 名接在 -f 後面）
+跑法（容器模式；一次跑一個 class，class 名接在 -f 之後）
+    docker compose up -d --build --wait
+    docker compose run --rm locust \
+        -f /mnt/locust/demo2_event_loop.py AsyncSleepUser \
+        --host http://app:8000 --headless -u 20 -r 20 -t 30s
+    # SyncSleepUser / CpuUser：同上換 class 名再跑；
+    # 或開 Web UI（http://localhost:8089）用 class-picker 勾選：
+    #   LOCUSTFILE=demo2_event_loop.py docker compose up -d locust
+
+跑法（本機模式）
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
     uv run locust -f locustfiles/demo2_event_loop.py AsyncSleepUser --headless -u 20 -r 20 -t 30s
@@ -19,7 +28,8 @@
 
 殺手級示範（mentor 震撼教育）
     跑 SyncSleepUser 期間，開另一個 terminal：
-        curl -m 5 http://127.0.0.1:8000/healthz
+        curl -m 5 http://localhost:8000/healthz
+    （容器模式 8000 已映射到 host，兩種模式同一招）
     → 連 health check 都 timeout！一個 time.sleep 就讓「整個服務」凍結。
     想像這是 production，K8s liveness probe 失敗 → Pod 被重啟 → 雪崩。
 

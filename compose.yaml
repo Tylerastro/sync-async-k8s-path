@@ -1,13 +1,25 @@
-# 壓測靶機的 PostgreSQL。
-# 刻意不掛 named volume —— `docker compose down` 即重置資料，
-# 每輪實驗都從同一份 seed 開始，數據才有可比性。
+# 壓測環境 —— db / 靶機 / 攻擊機三個容器，用 cpuset 鎖在不同核心，
+# 攻擊機吃滿 CPU 時不會反過來搶走靶機的資源（demo3 的教訓容器化版）。
+#
+# 核心配置（Docker VM 共 10 vCPU）：
+#   db     → 0,1    防守方的資料庫
+#   app    → 2,3    靶機。1 個 uvicorn worker；給 2 核是刻意的 ——
+#                   sync threadpool 能跨核平行、async 的 event loop 只吃得到 1 核，
+#                   這個不對稱本身就是 sync/async 對照實驗的一部分
+#   locust → 4-7    攻擊機。給最多核：攻擊機不能先成為瓶頸
+#   （8,9 留給 VM 自己與其他容器）
+#
+# macOS 注意：cpuset 編號指的是 Docker Desktop Linux VM 的 vCPU，
+#   不是 Mac 的實體核心。先用 `docker info | grep CPUs` 確認 VM 配了幾顆
+#   （Docker Desktop → Settings → Resources 可調）；少於 10 顆時要自行縮小各 cpuset。
+#
+# 監控兩側資源（鐵則 1）：docker stats
 services:
   db:
     image: postgres:17-alpine
-    # PG 預設 max_connections=100。靶機開了 sync + async 兩組 pool，
-    # 做「pool 20 → 100」實驗時兩組合計會超過 100 直接撞死 —— 先調高。
-    # （production 不會這樣做，connection 是昂貴資源，這也是個考點）
-    command: ["postgres", "-c", "max_connections=500"]
+    command: ["postgres", "-c", "max_connections=200"]
+    cpuset: "0,1"
+    mem_limit: 1g
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
@@ -21,3 +33,50 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+
+  app:
+    build: .
+    cpuset: "2,3"
+    mem_limit: 256m
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/social
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+    ports:
+      - "8000:8000"
+    ulimits:
+      nofile: 10240
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # 攻擊機。換 demo 腳本：LOCUSTFILE=demo4_sync_vs_async_db.py docker compose up -d locust
+  # headless 一次跑（不經 Web UI）：
+  #   docker compose run --rm locust -f /mnt/locust/<demo>.py --host http://app:8000 --headless -u 50 -r 10 -t 60s
+  locust:
+    image: locustio/locust:2.44.1
+    cpuset: "4-7"
+    mem_limit: 2g
+    volumes:
+      - ./locustfiles:/mnt/locust:ro
+    command: >
+      -f /mnt/locust/${LOCUSTFILE:-demo1_basics.py}
+      --host http://app:8000
+      --class-picker
+    ports:
+      - "8089:8089"
+    ulimits:
+      nofile: 10240
+    depends_on:
+      app:
+        condition: service_healthy
